@@ -174,6 +174,49 @@ CORRECTED_MERGE_KEY: Final[list[str]] = [
     "task", "model_name", "target_day", "business_day", "ds", "hour_business",
 ]
 
+
+# --- Fusion output schema (P4) ------------------------------------------------
+# After fusion, per-hour fused prices, weight metadata, and model eligibility
+# tracking.
+
+FUSION_OUTPUT_COLUMNS: Final[list[str]] = [
+    "task",                 # "dayahead" | "realtime"
+    "target_day",           # calendar day being predicted (YYYY-MM-DD)
+    "business_day",         # business day (YYYY-MM-DD)
+    "ds",                   # full timestamp (YYYY-MM-DD HH:MM:SS)
+    "hour_business",        # 1..24
+    "period",               # "1_8" | "9_16" | "17_24"
+    "fused_price",          # sum(weight_i * y_pred_corrected_i)
+    "weights_json",         # JSON-encoded {model_name: weight, ...}
+    "included_models",      # semicolon-delimited model list
+    "excluded_models",      # semicolon-delimited model list
+    "fusion_method",        # "equal_weight" | "prior_weight" | "bgew_skeleton"
+    "learner_version",      # version string of the weight learner
+    "readiness_mode",       # "REAL" | "DRY_RUN"
+    "reason_codes",         # semicolon-delimited codes
+]
+
+FUSION_UNIQUE_KEY: Final[list[str]] = [
+    "task", "target_day", "business_day", "ds", "hour_business",
+]
+
+FUSION_GROUPING_KEY: Final[list[str]] = [
+    "task", "target_day", "business_day", "ds", "hour_business", "period",
+]
+
+FUSION_REQUIRED_INPUT_COLUMNS: Final[list[str]] = [
+    "task", "model_name", "target_day", "business_day", "ds",
+    "hour_business", "period", "y_pred_corrected",
+]
+
+VALID_FUSION_METHODS: Final[list[str]] = [
+    "equal_weight", "prior_weight", "bgew_skeleton",
+]
+
+FUSION_READINESS_STATES: Final[list[str]] = [
+    "READY_REAL", "READY_DRY_RUN", "READY_STUB", "DATA_MISSING", "NOT_READY",
+]
+
 CORRECTED_REQUIRED_KEYS: Final[list[str]] = [
     "task", "model_name", "target_day", "business_day", "ds",
     "hour_business", "period",
