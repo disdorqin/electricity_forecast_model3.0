@@ -28,8 +28,8 @@ from data.business_day import (
 from data.schema import (
     PREDICTION_OUTPUT_COLUMNS,
     EVAL_ONLY_COLUMNS,
-    PREDICTION_UNIQUE_KEY,
-    ACTUAL_UNIQUE_KEY,
+    PREDICTION_LEDGER_KEY,
+    ACTUAL_LEDGER_KEY,
     validate_output_columns,
     validate_no_eval_columns,
     ensure_output_schema,
@@ -219,15 +219,15 @@ class TestSchemaCompleteness:
         assert len(PREDICTION_OUTPUT_COLUMNS) == 10
 
     def test_prediction_unique_key_is_subset_of_ledger(self):
-        """PREDICTION_UNIQUE_KEY columns all exist in PREDICTION_LEDGER_COLUMNS."""
+        """PREDICTION_LEDGER_KEY columns all exist in PREDICTION_LEDGER_COLUMNS."""
         from data.schema import PREDICTION_LEDGER_COLUMNS
-        for col in PREDICTION_UNIQUE_KEY:
+        for col in PREDICTION_LEDGER_KEY:
             assert col in PREDICTION_LEDGER_COLUMNS, f"{col} missing from ledger columns"
 
     def test_actual_unique_key_columns_exist(self):
-        """ACTUAL_UNIQUE_KEY columns exist in ACTUAL_LEDGER_COLUMNS."""
+        """ACTUAL_LEDGER_KEY columns exist in ACTUAL_LEDGER_COLUMNS."""
         from data.schema import ACTUAL_LEDGER_COLUMNS
-        for col in ACTUAL_UNIQUE_KEY:
+        for col in ACTUAL_LEDGER_KEY:
             assert col in ACTUAL_LEDGER_COLUMNS, f"{col} missing from actual ledger"
 
     def test_eval_only_not_in_output(self):

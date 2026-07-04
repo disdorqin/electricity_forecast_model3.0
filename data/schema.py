@@ -51,7 +51,6 @@ FULL_OUTPUT_COLUMNS: Final[list[str]] = PREDICTION_OUTPUT_COLUMNS + EVAL_ONLY_CO
 PREDICTION_LEDGER_COLUMNS: Final[list[str]] = [
     "task",
     "model_name",
-    "forecast_date",       # date the prediction was made (YYYY-MM-DD)
     "target_day",
     "business_day",
     "ds",
@@ -60,11 +59,13 @@ PREDICTION_LEDGER_COLUMNS: Final[list[str]] = [
     "y_pred",
     "source_confidence",
     "model_version",
+    "run_id",
     "created_at",
+    "updated_at",
 ]
 
-PREDICTION_UNIQUE_KEY: Final[list[str]] = [
-    "task", "model_name", "forecast_date", "target_day", "business_day", "hour_business",
+PREDICTION_LEDGER_KEY: Final[list[str]] = [
+    "task", "model_name", "target_day", "business_day", "hour_business",
 ]
 
 # ──────────────────────────────────────────────
@@ -81,10 +82,12 @@ ACTUAL_LEDGER_COLUMNS: Final[list[str]] = [
     "period",
     "y_true",
     "actual_source",
+    "run_id",
     "created_at",
+    "updated_at",
 ]
 
-ACTUAL_UNIQUE_KEY: Final[list[str]] = [
+ACTUAL_LEDGER_KEY: Final[list[str]] = [
     "task", "target_day", "business_day", "hour_business",
 ]
 
@@ -175,6 +178,37 @@ CORRECTED_MERGE_KEY: Final[list[str]] = [
 ]
 
 
+# --- Corrected ledger schema (P5) ------------------------------------------------
+# Accumulates corrected predictions day by day.
+
+CORRECTED_LEDGER_COLUMNS: Final[list[str]] = [
+    "task",
+    "model_name",
+    "target_day",
+    "business_day",
+    "ds",
+    "hour_business",
+    "period",
+    "y_pred_raw",
+    "y_pred_corrected",
+    "residual_delta",
+    "correction_applied",
+    "correction_module",
+    "risk_source",
+    "reason_codes",
+    "correction_version",
+    "source_confidence",
+    "model_version",
+    "run_id",
+    "created_at",
+    "updated_at",
+]
+
+CORRECTED_LEDGER_KEY: Final[list[str]] = [
+    "task", "model_name", "target_day", "business_day", "hour_business",
+]
+
+
 # --- Fusion output schema (P4) ------------------------------------------------
 # After fusion, per-hour fused prices, weight metadata, and model eligibility
 # tracking.
@@ -216,6 +250,61 @@ VALID_FUSION_METHODS: Final[list[str]] = [
 FUSION_READINESS_STATES: Final[list[str]] = [
     "READY_REAL", "READY_DRY_RUN", "READY_STUB", "DATA_MISSING", "NOT_READY",
 ]
+
+
+# --- Fusion ledger schema (P5) ---------------------------------------------------
+# Accumulates fusion output day by day.
+
+FUSION_LEDGER_COLUMNS: Final[list[str]] = [
+    "task",
+    "target_day",
+    "business_day",
+    "ds",
+    "hour_business",
+    "period",
+    "fused_price",
+    "weights_json",
+    "included_models",
+    "excluded_models",
+    "fusion_method",
+    "learner_version",
+    "readiness_mode",
+    "reason_codes",
+    "run_id",
+    "created_at",
+    "updated_at",
+]
+
+FUSION_LEDGER_KEY: Final[list[str]] = [
+    "task", "target_day", "business_day", "hour_business",
+]
+
+
+# --- Weight ledger schema (P5) ---------------------------------------------------
+# Per-model per-hour weights extracted from fusion output.
+
+WEIGHT_LEDGER_COLUMNS: Final[list[str]] = [
+    "task",
+    "target_day",
+    "business_day",
+    "ds",
+    "hour_business",
+    "period",
+    "model_name",
+    "weight",
+    "fusion_method",
+    "learner_version",
+    "weight_source",
+    "reason_codes",
+    "run_id",
+    "created_at",
+    "updated_at",
+]
+
+WEIGHT_LEDGER_KEY: Final[list[str]] = [
+    "task", "target_day", "business_day", "hour_business", "model_name", "fusion_method",
+]
+
 
 CORRECTED_REQUIRED_KEYS: Final[list[str]] = [
     "task", "model_name", "target_day", "business_day", "ds",
