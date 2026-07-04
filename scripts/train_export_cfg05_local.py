@@ -255,12 +255,9 @@ def train_export_cfg05_local(
         result["reason_codes"].append("CFG05_LOCAL_TRAIN_FAILED")
         return result
 
-    # Feature input rows: target_day + 1 hour to target_day + 1 day
-    feat_start = target_dt + pd.Timedelta(hours=1)
-    feat_end = target_dt + pd.Timedelta(days=1)
-    feat_mask = (
-        (df_feat["ds"] >= feat_start) & (df_feat["ds"] < feat_end)
-    )
+    # Feature input rows: canonical 24-hour window (D+01:00 .. D+1 01:00)
+    from artifacts.dayahead_window import day_ahead_mask
+    feat_mask = day_ahead_mask(df_feat, target_day)
     feat_df = df_feat[feat_mask].copy()
     logger.info(
         "Train: %d rows, Feature input: %d rows",

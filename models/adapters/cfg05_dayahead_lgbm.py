@@ -195,13 +195,10 @@ class CFG05DayaheadAdapter(BasePredictionAdapter):
         else:
             df = df.copy()
 
-        # Filter to target date
+        # Filter to target date (canonical 24-hour window: D+01:00 .. D+1 01:00)
         if target_date:
-            target_dt = pd.Timestamp(target_date)
-            start = target_dt + pd.Timedelta(hours=1)
-            end = target_dt + pd.Timedelta(days=1)
-            mask = (pd.to_datetime(df["ds"]) >= start) & (pd.to_datetime(df["ds"]) < end)
-            df = df[mask].copy()
+            from artifacts.dayahead_window import filter_dayahead
+            df = filter_dayahead(df, target_date)
 
         if len(df) == 0:
             logger.warning(f"No data for target_date={target_date}, returning empty")
