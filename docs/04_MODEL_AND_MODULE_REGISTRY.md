@@ -2,126 +2,266 @@
 
 ## Day-ahead candidates
 
-### cfg05_dayahead_lgbm
-
-来源：
+Source:
 
 ```text
 disdorqin/epf-sota-experiment
 ```
 
-状态：
+Registry status:
 
 ```text
-TRUSTED_CHAMPION_FROM_BRANCH_SUMMARY
+DESIGN_CONFIRMED_FROM_HANDOFF_AND_REPORTS
+CODE_REGISTRY_PATH_NOT_FOUND_ON_MAIN
 ```
 
-指标：
+Expected default fusion pool:
+
+```python
+DEFAULT_FUSION_POOL = [
+    "cfg05",
+    "best_two_average",
+    "stage3_business_fixed",
+    "catboost_spike_residual",
+    "catboost_sota",
+]
+```
+
+### cfg05 / lightgbm_cfg05_dayahead
+
+Role:
 
 ```text
-sMAPE_floor50 = 11.4838%
+champion
 ```
 
-条件：
+Metric:
+
+```text
+sMAPE_floor50 = 11.4838% / reported 11.48%
+```
+
+Config:
+
+```text
+model = LightGBM
+window = 90d
+objective = mae
+num_leaves = 191
+min_data_in_leaf = 30
+learning_rate = 0.015
+lambda_l1 = 0.1
+lambda_l2 = 5.0
+feature_fraction = 0.85
+bagging_fraction = 0.95
+bagging_freq = 5
+n_estimators = 2000
+```
+
+Required contract:
 
 ```text
 720 rows
 task = dayahead
 hour_business = 1..24
 business_day mapping correct
+hour 24 = D+1 00:00
 no target leakage
-contract tests pass
+sMAPE_floor50 unified
 ```
 
-### catboost_sota / catboost_spike_residual
+### best_two_average
 
-来源：
+Role:
 
 ```text
-disdorqin/epf-sota-experiment
+strong_candidate / fusion input
 ```
 
-状态：
+Metric:
 
 ```text
-NEEDS_SOURCE_REVIEW
+approximately 11.85%
 ```
 
-已知：
+### stage3_business_fixed
+
+Role:
 
 ```text
-catboost_sota = 12.58%
-catboost_spike_residual_corrected = 12.47%
+strong_candidate / fusion input
 ```
 
-是否进入 fusion candidates：
+Metric:
 
 ```text
-MISSING - 需要审阅真实输出是否无泄漏、schema 是否合格。
+approximately 11.86%
 ```
 
-### invalid lgbm_spike_residual_corrected
+### catboost_spike_residual
 
-状态：
+Role:
+
+```text
+diversity_fallback
+```
+
+Metric:
+
+```text
+approximately 12.47%
+```
+
+Condition:
+
+```text
+May enter fusion only if schema, no-leakage, and business-day checks pass.
+```
+
+### catboost_sota
+
+Role:
+
+```text
+baseline_fallback
+```
+
+Metric:
+
+```text
+approximately 12.58%
+```
+
+## Invalid day-ahead models
+
+### lgbm_spike_residual_1127
+
+Status:
 
 ```text
 INVALID_DO_NOT_USE
 ```
 
-原因：
+Reason:
 
 ```text
-11.27% 结果存在 target leakage。
+Target leakage: prediction-day y_true used as feature.
+```
+
+### stage3_old_1164
+
+Status:
+
+```text
+INVALID_DO_NOT_USE
+```
+
+Reason:
+
+```text
+Natural-day mapping error; violates business_day rule.
+```
+
+### lightgbm_90d_orig_1197
+
+Status:
+
+```text
+INVALID_DO_NOT_USE_AS_STANDARD_CANDIDATE
+```
+
+Reason:
+
+```text
+690 rows only; missing hour_business = 24.
 ```
 
 ## Realtime candidates
 
 ### da_safe_realtime_assist
 
-来源：
+Source:
 
 ```text
-realtime SOTA repo/path: MISSING
+disdorqin/electricity_forecast_deep_sgdf_delta
 ```
 
-状态：
+Status:
 
 ```text
 SIDE_CAR_ASSIST_CANDIDATE
+NEEDS_FINAL_HARDENING_BEFORE_CHAIN_HANDOFF
 ```
 
-默认行为：
+Default behavior:
 
 ```text
 rt_pred = da_anchor
 ```
 
-输出：
+Required output:
 
 ```text
-da_error_prob
-residual_direction_prob
+business_day
+hour_business
+ds
+da_anchor
+rt_pred
+safe_correction
+final_pred_source
+da_error_prob_50
+da_error_prob_100
+da_error_prob_150
+da_error_prob_200
+prob_residual_up
+prob_residual_down
+prob_residual_neutral
+expected_abs_residual
+residual_magnitude_bucket
 uncertainty_score
 correction_permission
 reason_codes
 model_version
 ```
 
-### sgdfnet_2_5
-
-来源：
+Important verdict:
 
 ```text
-electricity_forecast_model2.5
+DeepRT experiments are NO_GO as direct DA replacement.
+Use as assist/risk sidecar, not unconditional price correction.
 ```
 
-状态：
+Hardening requirements:
+
+```text
+exported_models/rt_assist_pack/
+scripts/export_rt_assist_pack.py
+scripts/predict_rt_assist_pack.py
+hourly output schema
+DA-only fallback manifest
+no-leakage tests
+fix dataset interface mismatch
+disable or implement hourly mode
+fix MLP input dimension risk
+formal mode must not fill target NaN with 0
+rename or fix same-hour rolling feature
+```
+
+### sgdfnet_2_5
+
+Source:
+
+```text
+disdorqin/electricity_forecast_model2.5
+```
+
+Status:
 
 ```text
 NEEDS_SOURCE_REVIEW
 ```
 
-用途：
+Use:
 
 ```text
 Realtime model candidate for learner/fusion.
@@ -131,20 +271,20 @@ Realtime model candidate for learner/fusion.
 
 ### p5m_negative_low_valley_residual
 
-来源：
+Source:
 
 ```text
 disdorqin/electricity_forecast_model2.0_exp
 branch: tune-timemixer
 ```
 
-状态：
+Status:
 
 ```text
 PLUGIN_CANDIDATE
 ```
 
-已知 official：
+Known official:
 
 ```text
 C negative-only GO
@@ -154,7 +294,7 @@ overall_sMAPE_improvement +0.01
 high_spike_MAE_improvement -0.54%
 ```
 
-限制：
+Limitation:
 
 ```text
 B/D high_spike/unified DATA-MISSING because high_spike_prob missing.
@@ -164,19 +304,19 @@ B/D high_spike/unified DATA-MISSING because high_spike_prob missing.
 
 ### 2.5 ledger learner
 
-来源：
+Source:
 
 ```text
-electricity_forecast_model2.5
+disdorqin/electricity_forecast_model2.5
 ```
 
-状态：
+Status:
 
 ```text
 TO_BE_MIGRATED
 ```
 
-职责：
+Responsibility:
 
 ```text
 Use past 30-day prediction ledger + actual ledger to learn weights.
@@ -184,19 +324,19 @@ Use past 30-day prediction ledger + actual ledger to learn weights.
 
 ### Regime-Ledger-GEF
 
-来源：
+Source:
 
 ```text
 3.0 new design
 ```
 
-状态：
+Status:
 
 ```text
-ROADMAP
+ROADMAP_AFTER_2.5_CHAIN_STABLE
 ```
 
-职责：
+Responsibility:
 
 ```text
 Add regime / spike / negative / uncertainty gating to ledger learner.
@@ -206,19 +346,19 @@ Add regime / spike / negative / uncertainty gating to ledger learner.
 
 ### 2.5 negative price classifier
 
-来源：
+Source:
 
 ```text
-electricity_forecast_model2.5
+disdorqin/electricity_forecast_model2.5
 ```
 
-状态：
+Status:
 
 ```text
 TO_BE_MIGRATED
 ```
 
-位置：
+Position:
 
 ```text
 after fusion, before final output
