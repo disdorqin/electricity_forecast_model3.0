@@ -1,5 +1,11 @@
-# Local data and reports
-data/
+# Local data and reports (block raw data files, allow .py source)
+data/**/*.csv
+data/**/*.xlsx
+data/**/*.xls
+data/**/*.pkl
+data/**/*.joblib
+data/**/*.parquet
+data/**/*.feather
 reports/local/
 outputs/
 *.csv
