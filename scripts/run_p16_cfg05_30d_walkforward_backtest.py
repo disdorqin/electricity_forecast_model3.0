@@ -561,7 +561,7 @@ def run_p16_cfg05_30d_walkforward_backtest(
     # and work_dir itself is under an allowed location (or is an absolute test path)
     work_dir_norm = os.path.abspath(work_dir).replace("\\", "/")
     work_dir_is_safe = (
-        any(work_dir_norm.endswith(a) or f"/{a.lstrip('.')}" in work_dir_norm for a in _ALLOWED_WORK_DIRS)
+        any(a.lstrip(".") in work_dir_norm for a in _ALLOWED_WORK_DIRS)
         or os.path.isabs(work_dir)  # absolute paths (tests) are OK
     )
     if not work_dir_is_safe:
