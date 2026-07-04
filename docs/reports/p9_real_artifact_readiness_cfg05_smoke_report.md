@@ -90,7 +90,7 @@ File: `artifacts/readiness.py` — `check_cfg05_input()`
 Checks performed:
 1. Path existence
 2. CSV loadability, non-empty
-3. All 39 `CFG05_FEATURE_COLUMNS` present
+3. All `{len(CFG05_FEATURE_COLUMNS)}` feature columns (`CFG05_FEATURE_COLUMNS`) present (dynamically resolved)
 4. `ds` timestamp column present
 5. Reports counts of present/missing feature columns
 
