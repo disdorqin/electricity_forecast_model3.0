@@ -1,0 +1,24 @@
+# 3.0 model sets
+# Concrete adapters should be enabled only after source code is migrated and tests pass.
+
+dayahead:
+  candidates:
+    - name: cfg05_dayahead_lgbm
+      source: disdorqin/epf-sota-experiment
+      status: frozen_champion
+      metric:
+        sMAPE_floor50: 11.4838
+
+realtime:
+  candidates:
+    - name: da_safe_realtime_assist
+      source: MISSING
+      status: sidecar_assist
+      default_behavior: rt_pred_equals_da_anchor
+
+residual:
+  plugins:
+    - name: p5m_negative_low_valley_residual
+      source: disdorqin/electricity_forecast_model2.0_exp
+      branch: tune-timemixer
+      status: plugin_candidate

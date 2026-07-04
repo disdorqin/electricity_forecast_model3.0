@@ -1,0 +1,1 @@
+"""Extreme forecast guardrail placeholder."""

@@ -1,0 +1,38 @@
+{
+  "repo_name": "electricity_forecast_model3.0",
+  "target_windows_path": "D:\\作业\\大创_挑战杯_互联网\\大学生创新创业计划\\大创实现\\其他资料\\electricity_forecast_model3.0",
+  "created_at": "2026-07-04T09:52:20.544829Z",
+  "purpose": "3.0 command center docs and scaffold for electricity spot price forecasting system",
+  "sources": {
+    "2.0_exp": {
+      "repo": "disdorqin/electricity_forecast_model2.0_exp",
+      "branch": "tune-timemixer",
+      "local_path": "MISSING"
+    },
+    "2.5_ledger": {
+      "repo_or_path": "electricity_forecast_model2.5",
+      "local_path": "MISSING"
+    },
+    "dayahead_cfg05": {
+      "repo": "disdorqin/epf-sota-experiment",
+      "local_path": "MISSING",
+      "champion": "cfg05_dayahead_lgbm",
+      "sMAPE_floor50": 11.4838
+    },
+    "realtime_da_safe_assist": {
+      "repo_or_path": "MISSING",
+      "status": "MISSING until real repo reviewed"
+    },
+    "p5m_residual": {
+      "repo": "disdorqin/electricity_forecast_model2.0_exp",
+      "branch": "tune-timemixer",
+      "status": "plugin candidate"
+    }
+  },
+  "invalid_results": [
+    "lgbm_spike_residual_corrected = 11.27% target leakage",
+    "Stage3 old = 11.64% natural-day mapping error",
+    "690-row / missing-hour-24 outputs",
+    "any correction using y_true/residual/error/abs_error as prediction feature"
+  ]
+}

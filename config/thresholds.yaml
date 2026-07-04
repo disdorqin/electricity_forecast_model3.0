@@ -1,0 +1,14 @@
+# Placeholder thresholds.
+# Must be calibrated from ledger history. Do not treat these as production values.
+
+spike:
+  high_spike_quantile: MISSING
+  super_spike_quantile: MISSING
+
+negative:
+  threshold_low: MISSING
+  threshold_high: MISSING
+
+guardrail:
+  model_disagreement_threshold: MISSING
+  uncertainty_threshold: MISSING

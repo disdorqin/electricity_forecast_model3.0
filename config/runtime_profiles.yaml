@@ -1,0 +1,13 @@
+default:
+  device: auto
+  split_target_subprocess: true
+  clear_gpu_between_targets: true
+
+cpu_safe:
+  device: cpu
+  split_target_subprocess: false
+
+gpu_safe:
+  device: cuda
+  split_target_subprocess: true
+  clear_gpu_between_targets: true
