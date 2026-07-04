@@ -8,7 +8,7 @@ Checks:
     1. Required columns exist.
     2. hour_business in 1..24.
     3. period in 1_8 / 9_16 / 17_24.
-    4. No duplicate keys (task, model_name, business_day, hour_business).
+    4. No duplicate keys (task, model_name, target_day, business_day, hour_business).
     5. y_pred_raw has no NaN.
     6. y_pred_corrected has no NaN.
     7. residual_delta has no NaN.

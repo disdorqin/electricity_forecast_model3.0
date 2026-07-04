@@ -164,7 +164,14 @@ CORRECTED_PREDICTION_COLUMNS: Final[list[str]] = [
 ]
 
 CORRECTED_UNIQUE_KEY: Final[list[str]] = [
-    "task", "model_name", "business_day", "hour_business",
+    "task", "model_name", "target_day", "business_day", "hour_business",
+]
+
+# Merge key used for joining risk data onto predictions for residual correction.
+# The full 6-column key is preferred.  Fewer columns are accepted when the
+# risk DataFrame does not carry the full set (degraded merge).
+CORRECTED_MERGE_KEY: Final[list[str]] = [
+    "task", "model_name", "target_day", "business_day", "ds", "hour_business",
 ]
 
 CORRECTED_REQUIRED_KEYS: Final[list[str]] = [

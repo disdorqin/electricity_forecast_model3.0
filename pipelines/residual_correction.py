@@ -35,6 +35,7 @@ import pandas as pd
 from data.schema import (
     CORRECTED_PREDICTION_COLUMNS,
     CORRECTED_UNIQUE_KEY,
+    CORRECTED_MERGE_KEY,
     CORRECTED_REQUIRED_KEYS,
     PREDICTION_OUTPUT_COLUMNS,
     EVAL_ONLY_COLUMNS,
@@ -70,6 +71,145 @@ def _validate_input(df: pd.DataFrame) -> list[str]:
     if "y_pred" not in df.columns and "y_pred_raw" not in df.columns:
         missing.append("y_pred or y_pred_raw")
     return missing
+
+
+def _resolve_risk_merge_key(
+    pred_columns: list[str],
+    risk_columns: list[str],
+) -> tuple[list[str], str] | tuple[None, None]:
+    """Resolve the best available merge key between predictions and risk data.
+
+    Full merge key (6 columns):
+        task, model_name, target_day, business_day, ds, hour_business
+
+    Tries progressively shorter key combinations so that risk data
+    without the full key set is still usable.
+
+    Returns
+    -------
+    tuple[list[str], str] or tuple[None, None]
+        (merge_key_columns, key_quality) where key_quality is one of
+        ``"full"``, ``"partial"``, ``"degraded"``, or
+        ``(None, None)`` when no merge is possible.
+    """
+    # Full key available in both?
+    available = [c for c in CORRECTED_MERGE_KEY if c in pred_columns and c in risk_columns]
+
+    if all(c in available for c in CORRECTED_MERGE_KEY):
+        return list(CORRECTED_MERGE_KEY), "full"
+
+    # Partial: task + model_name + target_day + business_day + hour_business
+    partial_key = ["task", "model_name", "target_day", "business_day", "hour_business"]
+    if all(c in available for c in partial_key):
+        return partial_key, "partial"
+
+    # Partial without model_name: task + target_day + business_day + hour_business
+    partial_no_mn = ["task", "target_day", "business_day", "hour_business"]
+    if all(c in available for c in partial_no_mn):
+        return partial_no_mn, "partial"
+
+    # Degraded: business_day + hour_business only
+    degraded_key = ["business_day", "hour_business"]
+    if all(c in available for c in degraded_key):
+        return degraded_key, "degraded"
+
+    # No viable merge key
+    return None, None
+
+
+def _merge_risk_data(
+    predictions_df: pd.DataFrame,
+    risk_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Key-based merge of risk data onto predictions.
+
+    Parameters
+    ----------
+    predictions_df : pd.DataFrame
+        Prediction DataFrame with business-time columns resolved.
+    risk_df : pd.DataFrame
+        Risk data DataFrame to merge.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, dict]
+        (predictions with risk columns merged in, merge_stats).
+        merge_stats includes merge_key, key_quality, n_risk_rows,
+        n_matched, n_unmatched_risk_rows, n_pred_rows_without_risk.
+    """
+    stats: dict[str, object] = {
+        "merge_key": None,
+        "key_quality": None,
+        "n_risk_rows": len(risk_df),
+        "n_matched": 0,
+        "n_unmatched_risk_rows": 0,
+        "n_pred_rows_without_risk": 0,
+    }
+
+    merge_key, key_quality = _resolve_risk_merge_key(
+        list(predictions_df.columns), list(risk_df.columns),
+    )
+
+    if merge_key is None or key_quality is None:
+        logger.warning(
+            "Risk DataFrame has no columns matching the merge key. "
+            "Skipping risk merge. Risk columns required for merge: "
+            "business_day + hour_business (minimal). "
+            f"Risk columns available: {list(risk_df.columns)}"
+        )
+        stats["key_quality"] = "none"
+        stats["n_unmatched_risk_rows"] = len(risk_df)
+        stats["n_pred_rows_without_risk"] = len(predictions_df)
+        return predictions_df, stats
+
+    stats["merge_key"] = merge_key
+    stats["key_quality"] = key_quality
+
+    # Identify risk columns to bring across (not already in predictions)
+    risk_merge_cols = [c for c in risk_df.columns if c not in predictions_df.columns]
+
+    if not risk_merge_cols:
+        logger.warning("Risk DataFrame has no additional columns beyond merge key.")
+        stats["n_unmatched_risk_rows"] = len(risk_df)
+        stats["n_pred_rows_without_risk"] = len(predictions_df)
+        return predictions_df, stats
+
+    n_pred_before = len(predictions_df)
+    n_risk_before = len(risk_df)
+
+    # Left-merge risk data onto predictions
+    merged = predictions_df.merge(
+        risk_df[merge_key + risk_merge_cols],
+        on=merge_key,
+        how="left",
+        suffixes=("", "_risk"),
+    )
+
+    # After left merge, rows that didn't match will have NaN in risk columns
+    risk_indicator_col = risk_merge_cols[0]
+    n_matched = merged[risk_indicator_col].notna().sum()
+    n_pred_without_risk = n_pred_before - n_matched
+
+    # Count unmatched risk rows (risk rows that didn't match any prediction)
+    # Do a right-anti join conceptually
+    risk_merged_inner = risk_df[merge_key + risk_merge_cols].merge(
+        predictions_df[merge_key],
+        on=merge_key,
+        how="inner",
+    )
+    n_unmatched_risk = n_risk_before - len(risk_merged_inner)
+
+    stats["n_matched"] = int(n_matched)
+    stats["n_unmatched_risk_rows"] = int(n_unmatched_risk)
+    stats["n_pred_rows_without_risk"] = int(n_pred_without_risk)
+
+    logger.info(
+        f"Risk merge ({key_quality} key, {merge_key}): "
+        f"{n_matched}/{n_pred_before} prediction rows matched, "
+        f"{n_unmatched_risk}/{n_risk_before} risk rows unmatched"
+    )
+
+    return merged, stats
 
 
 def apply_residual_correction(
@@ -203,12 +343,26 @@ def apply_residual_correction(
             p5m_adapter = P5MResidualPluginAdapter(profile=correction_profile)
             p5m_adapter.load()
 
-            # Merge risk data if provided
+            # ── Key-based risk merge (not positional) ─────────
             input_for_adapter = df.copy()
+            merge_stats: dict[str, object] = {}
             if risk_df is not None:
-                for col in risk_df.columns:
-                    if col not in input_for_adapter.columns:
-                        input_for_adapter[col] = risk_df[col].values
+                input_for_adapter, merge_stats = _merge_risk_data(
+                    input_for_adapter, risk_df,
+                )
+                # Record merge outcome in reason codes
+                key_quality = merge_stats.get("key_quality", "none")
+                n_matched = merge_stats.get("n_matched", 0)
+                n_unmatched = merge_stats.get("n_unmatched_risk_rows", 0)
+                n_missing = merge_stats.get("n_pred_rows_without_risk", 0)
+
+                reason_codes.append(f"RISK_MERGE_{key_quality.upper()}_KEY")
+                if isinstance(n_matched, int) and n_matched > 0:
+                    reason_codes.append("RISK_ROW_MATCHED")
+                if isinstance(n_missing, int) and n_missing > 0:
+                    reason_codes.append("RISK_ROW_MISSING_NO_OP")
+                if isinstance(n_unmatched, int) and n_unmatched > 0:
+                    reason_codes.append(f"RISK_UNMATCHED_{n_unmatched}")
 
             # Call adapter
             adapter_result = p5m_adapter.predict(df=input_for_adapter)
@@ -220,7 +374,7 @@ def apply_residual_correction(
                 correction_module = "p5m_residual_plugin"
                 correction_version = p5m_adapter.model_version
                 risk_source = "NEGATIVE_RISK" if has_risk_data else "CANONICAL_PACK"
-                reason_codes = ["P5M_ADAPTER_CORRECTION"]
+                reason_codes.insert(0, "P5M_ADAPTER_CORRECTION")
                 if has_risk_data:
                     reason_codes.append("RISK_DATA_AVAILABLE")
                 if has_canonical_pack:

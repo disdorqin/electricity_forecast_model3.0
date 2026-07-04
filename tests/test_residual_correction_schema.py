@@ -18,6 +18,7 @@ import pytest
 from data.schema import (
     CORRECTED_PREDICTION_COLUMNS,
     CORRECTED_UNIQUE_KEY,
+    CORRECTED_MERGE_KEY,
     CORRECTED_REQUIRED_KEYS,
     PREDICTION_OUTPUT_COLUMNS,
 )
@@ -62,10 +63,24 @@ class TestCorrectedSchemaCompleteness:
         for col in CORRECTED_REQUIRED_KEYS:
             assert col in CORRECTED_PREDICTION_COLUMNS, f"{col} missing"
 
-    def test_unique_key_has_4_columns(self):
-        """CORRECTED_UNIQUE_KEY has exactly 4 columns."""
-        assert len(CORRECTED_UNIQUE_KEY) == 4
-        assert CORRECTED_UNIQUE_KEY == ["task", "model_name", "business_day", "hour_business"]
+    def test_unique_key_has_5_columns(self):
+        """CORRECTED_UNIQUE_KEY has exactly 5 columns."""
+        assert len(CORRECTED_UNIQUE_KEY) == 5
+        assert CORRECTED_UNIQUE_KEY == [
+            "task", "model_name", "target_day", "business_day", "hour_business",
+        ]
+
+    def test_merge_key_has_6_columns(self):
+        """CORRECTED_MERGE_KEY has exactly 6 columns."""
+        assert len(CORRECTED_MERGE_KEY) == 6
+        assert CORRECTED_MERGE_KEY == [
+            "task", "model_name", "target_day", "business_day", "ds", "hour_business",
+        ]
+
+    def test_merge_key_all_in_corrected_columns(self):
+        """All CORRECTED_MERGE_KEY columns exist in CORRECTED_PREDICTION_COLUMNS."""
+        for col in CORRECTED_MERGE_KEY:
+            assert col in CORRECTED_PREDICTION_COLUMNS, f"{col} missing"
 
 
 class TestCorrectedDataFrameConstruct:
