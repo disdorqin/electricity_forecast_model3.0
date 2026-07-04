@@ -306,6 +306,42 @@ WEIGHT_LEDGER_KEY: Final[list[str]] = [
 ]
 
 
+# --- Final output schema (P6) ---------------------------------------------------
+# After negative classifier, per-hour final prices with risk metadata.
+
+FINAL_OUTPUT_COLUMNS: Final[list[str]] = [
+    "task",                 # "dayahead" | "realtime"
+    "target_day",           # calendar day being predicted (YYYY-MM-DD)
+    "business_day",         # business day (YYYY-MM-DD)
+    "ds",                   # full timestamp (YYYY-MM-DD HH:MM:SS)
+    "hour_business",        # 1..24
+    "period",               # "1_8" | "9_16" | "17_24"
+    "fused_price",          # fusion output price (pre-classifier)
+    "final_price",          # classifier / guardrail post-processed price
+    "negative_prob",        # estimated negative-price probability [0, 1] or NaN
+    "negative_flag",        # boolean — negative-price risk flagged?
+    "negative_severity",    # "none" | "low" | "medium" | "high"
+    "classifier_applied",   # boolean — was a real classifier invoked?
+    "classifier_module",    # module identifier string
+    "classifier_version",   # version string
+    "risk_source",          # risk data source
+    "reason_codes",         # semicolon-delimited audit codes
+    "model_lineage_json",   # JSON-encoded lineage: fusion method, models, weights, classifier
+]
+
+FINAL_UNIQUE_KEY: Final[list[str]] = [
+    "task", "target_day", "business_day", "hour_business",
+]
+
+VALID_NEGATIVE_SEVERITY: Final[list[str]] = [
+    "none", "low", "medium", "high",
+]
+
+# Fallback classifier identifiers
+NEGATIVE_CLASSIFIER_NOOP: Final[str] = "negative_classifier_noop"
+NEGATIVE_CLASSIFIER_RULE: Final[str] = "negative_classifier_rule"
+NEGATIVE_CLASSIFIER_EXTREMPRICE: Final[str] = "ExtremPriceClf"
+
 CORRECTED_REQUIRED_KEYS: Final[list[str]] = [
     "task", "model_name", "target_day", "business_day", "ds",
     "hour_business", "period",
