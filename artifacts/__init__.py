@@ -1,0 +1,1 @@
+"""artifacts — Artifact readiness and verification for 3.0."""
