@@ -8,6 +8,7 @@ data/**/*.parquet
 data/**/*.feather
 reports/local/
 outputs/
+.local_artifacts/
 *.csv
 *.xlsx
 *.xls
