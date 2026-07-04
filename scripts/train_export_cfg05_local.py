@@ -72,6 +72,10 @@ def _path_is_safe(path: str) -> bool:
 def _import_source_module(source_repo: str, module_name: str):
     """Import a module from the source repo by name.
 
+    Uses ``importlib.import_module`` with the source repo on ``sys.path``
+    so that internal relative imports (e.g. ``from .feature_builder import ...``)
+    resolve correctly through the package hierarchy.
+
     Parameters
     ----------
     source_repo : str
@@ -83,14 +87,17 @@ def _import_source_module(source_repo: str, module_name: str):
     -------
     The imported module.
     """
+    import importlib as _il
+
     full_path = os.path.join(source_repo, *module_name.split(".")) + ".py"
     if not os.path.isfile(full_path):
         raise ImportError(f"Source module not found: {full_path}")
-    spec = importlib.util.spec_from_file_location(module_name, full_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load spec for {module_name} from {full_path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+
+    # Add source repo to sys.path so that package-relative imports work
+    if source_repo not in sys.path:
+        sys.path.insert(0, source_repo)
+
+    mod = _il.import_module(module_name)
     return mod
 
 

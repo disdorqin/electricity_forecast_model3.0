@@ -54,6 +54,14 @@ All output paths should use `.local_artifacts/p11_cfg05/` or similar.
    - `cfg05_model.txt` — trained LightGBM model
    - `cfg05_features_<target-day>.csv` — 42-column feature input CSV
 
+## P14 Workflow (one-command intake)
+
+1. **Inspect raw CSV schema** — `scripts/inspect_cfg05_raw_csv_schema.py --raw-data <path>`
+2. **Run full P14 pipeline** — `scripts/run_p14_raw_csv_intake_cfg05.py --raw-data <path> --run-real-smoke`
+3. Local artifacts go to `.local_artifacts/p14_cfg05/`:
+   - `cfg05_model.txt` — trained LightGBM model
+   - `cfg05_features_<target-day>.csv` — 42-column feature input CSV
+
 ## Enforcement
 
 - `.gitignore` blocks all forbidden extensions and paths
