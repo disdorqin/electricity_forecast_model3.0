@@ -9,87 +9,104 @@ url: https://github.com/disdorqin/electricity_forecast_model3.0
 
 ## Day-ahead 来源
 
-用户称：
-
-```text
-日前用那个 catboost 那个仓库
-```
-
-当前理解：
-
 ```text
 repo: disdorqin/epf-sota-experiment
+default_branch: main
+status: CONFIRMED
 ```
 
-需要审阅确认：
+用户口径：
 
 ```text
-1. 仓库中实际有哪些 day-ahead 模型。
-2. 哪些模型是有效候选。
-3. cfg05 LightGBM 是否仍为最终可信 champion。
-4. CatBoost 相关输出是否只是 baseline / spike residual，还是可作为候选。
+日前用 catboost/day-ahead model zoo 仓库。
 ```
 
-已知信息：
+当前确认：
 
 ```text
 cfg05 LightGBM = 11.4838% trusted champion
-CatBoost baseline = 12.58%
-CatBoost spike residual = 12.47%
-best_two_average = 11.85%
+best_two_average = 约 11.85%
+stage3_business_fixed = 约 11.86%
+catboost_spike_residual = 约 12.47%
+catboost_sota = 约 12.58%
+```
+
+待确认：
+
+```text
+src/registry/dayahead_models.py 在 main 上未找到
+scripts/run_dayahead_model_zoo.py 待确认
+tests/test_dayahead_model_zoo_contract.py 待确认
 ```
 
 禁用：
 
 ```text
-lgbm_spike_residual_corrected = 11.27% target leakage
-Stage3 old = 11.64% natural-day mapping error
+lgbm_spike_residual_1127: target leakage
+stage3_old_1164: natural-day mapping error
+lightgbm_90d_orig_1197: 690 rows / missing hour 24
 ```
 
 ## Realtime 来源
 
-用户称：
-
 ```text
-实时用那个 SOTA 仓库
+repo: disdorqin/electricity_forecast_deep_sgdf_delta
+default_branch: main
+status: CONFIRMED
 ```
 
-当前状态：
+用户口径：
 
 ```text
-repo/path: MISSING
+实时用 SOTA 仓库。
+当前最稳定位是 DA-Safe Realtime Assist Model。
 ```
 
-已知资料：
+当前确认：
 
 ```text
-DA-Safe Realtime Assist Model
-主预测使用 da_anchor
-深度/机器学习模块作为 sidecar
-不默认覆盖 DA
+models/deep_sgdf_delta/business_time.py exists
+models/deep_sgdf_delta/metrics.py exists
+docs/DEEP_RT_SOTA_2B_RESULTS.md exists
 ```
 
-额外候选：
+3.0 定位：
+
+```text
+realtime assist sidecar
+not direct DA replacement
+default rt_pred = da_anchor
+assist scores feed learner/fusion
+```
+
+需要 final hardening：
+
+```text
+exported_models/rt_assist_pack/
+scripts/export_rt_assist_pack.py
+scripts/predict_rt_assist_pack.py
+hourly prediction schema
+DA-only fallback manifest
+no-leakage tests
+fix dataset interface mismatch
+disable or implement hourly production mode
+fix MLP input dimension path
+formal mode must not fill target NaN with 0
+same-hour feature naming fix or rename
+```
+
+额外 realtime 候选：
 
 ```text
 2.5 的 SGDFNet 模型
-```
-
-需要审阅确认：
-
-```text
-1. realtime SOTA 仓库真实路径 / GitHub repo。
-2. 其 exported_models/rt_assist_pack 是否存在。
-3. scripts/predict_rt_assist_pack.py 是否可用。
-4. 输出 schema 是否包含 assist scores。
-5. 2.5 SGDFNet 如何迁移为 adapter。
 ```
 
 ## Residual 来源
 
 ```text
 repo: disdorqin/electricity_forecast_model2.0_exp
-branch: tune-timemixer
+branch/default_branch: tune-timemixer
+status: CONFIRMED
 ```
 
 模块：
@@ -120,7 +137,9 @@ tests/test_p5m_residual_stack.py
 ## Chain / Learner 来源
 
 ```text
-repo/path: electricity_forecast_model2.5
+repo: disdorqin/electricity_forecast_model2.5
+default_branch: main
+status: CONFIRMED
 ```
 
 需要迁移：
@@ -131,12 +150,7 @@ ledger_full
 ledger_full_range
 learner / fusion
 negative classifier
+SGDFNet
 ```
 
-当前状态：
-
-```text
-local path or repo url: MISSING
-```
-
-执行 AI 必须先定位真实来源，不能猜。
+执行 AI 必须先定位真实文件路径，不能猜。
