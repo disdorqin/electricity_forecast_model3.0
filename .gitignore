@@ -1,0 +1,29 @@
+# Local data and outputs
+data/
+outputs/
+reports/local/
+*.csv
+*.xlsx
+*.xls
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.ckpt
+*.parquet
+*.feather
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
