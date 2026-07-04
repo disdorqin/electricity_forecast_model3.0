@@ -45,6 +45,15 @@ committed.
 
 All output paths should use `.local_artifacts/p11_cfg05/` or similar.
 
+## P13 Workflow
+
+1. **Check raw data contract** — `scripts/check_cfg05_raw_data_contract.py --raw-data <path>`
+2. **Train + export model + features** — `scripts/train_export_cfg05_local.py --raw-data <path>`
+3. **Run P13 orchestration** — `scripts/run_p13_cfg05_raw_data_to_real_smoke.py --raw-data <path>`
+4. Local artifacts go to `.local_artifacts/p13_cfg05/`:
+   - `cfg05_model.txt` — trained LightGBM model
+   - `cfg05_features_<target-day>.csv` — 42-column feature input CSV
+
 ## Enforcement
 
 - `.gitignore` blocks all forbidden extensions and paths
