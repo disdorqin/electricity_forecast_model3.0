@@ -155,6 +155,7 @@ def _train_and_predict_single_day(
     train_window_days: int,
     feature_columns: list[str],
     reuse_model: bool = True,
+    device: str = "cpu",
 ) -> tuple[Optional[pd.DataFrame], dict[str, Any]]:
     """Train (or reuse) cfg05 and predict a single target day.
 
@@ -211,6 +212,8 @@ def _train_and_predict_single_day(
         y_train = train_df["y"].values
         params = dict(CFG05_PARAMS)
         params["verbosity"] = -1
+        if device != "cpu":
+            params["device"] = device
         n_estimators = params.pop("n_estimators", 2000)
         booster = lgb.train(
             params, lgb.Dataset(X_train, y_train),
@@ -269,6 +272,7 @@ def run_p16_cfg05_30d_walkforward_backtest(
     work_dir: Optional[str] = None,
     reuse_model: bool = True,
     feature_columns: Optional[list[str]] = None,
+    device: str = "cpu",
 ) -> dict[str, Any]:
     """Run cfg05 30-day walk-forward backtest.
 
@@ -411,6 +415,8 @@ def run_p16_cfg05_30d_walkforward_backtest(
                     y_train = train_df["y"].values
                     params = dict(CFG05_PARAMS)
                     params["verbosity"] = -1
+                    if device != "cpu":
+                        params["device"] = device
                     n_est = params.pop("n_estimators", 2000)
                     booster = lgb.train(
                         params, lgb.Dataset(X_train, y_train),
@@ -434,6 +440,7 @@ def run_p16_cfg05_30d_walkforward_backtest(
                 train_window_days=train_window_days,
                 feature_columns=feature_columns,
                 reuse_model=reuse_model,
+                device=device,
             )
 
             if pred is None:
@@ -612,6 +619,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--work-dir", type=str, default=None)
     p.add_argument("--no-reuse-model", action="store_true", default=False,
                    help="Retrain model for each day (true walk-forward).")
+    p.add_argument("--device", type=str, default="cpu",
+                   help="LightGBM device: cpu or gpu.")
     p.add_argument("--json", action="store_true", default=False)
     p.add_argument("--strict", action="store_true", default=False)
     p.add_argument("--verbose", "-v", action="store_true", default=False)
@@ -637,6 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         train_window_days=args.train_window_days,
         work_dir=work_dir,
         reuse_model=not args.no_reuse_model,
+        device=args.device,
     )
 
     if args.json:
