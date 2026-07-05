@@ -170,11 +170,11 @@ def step_raw_data_check(
         return result
 
     try:
-        from scripts.check_cfg05_raw_data_contract import run_raw_data_contract
-        cr = run_raw_data_contract(raw_data_path=raw_data)
-        status = cr["summary"]["status"]
+        from scripts.check_cfg05_raw_data_contract import check_cfg05_raw_data_contract
+        cr = check_cfg05_raw_data_contract(raw_data=raw_data)
+        status = cr["raw_data_status"]
         if status == "CFG05_RAW_DATA_VALID":
-            result["rows"] = cr.get("total_rows", 0)
+            result["rows"] = cr.get("rows", 0)
             result["hash"] = _file_hash(raw_data)
             result["status"] = "PASSED"
         elif status == "CFG05_RAW_DATA_MISSING":
@@ -263,6 +263,7 @@ def step_load_or_run_trust_gate(
 def step_load_or_run_actual_ledger(
     work_dir: str,
     force: bool,
+    raw_data: str = "",
 ) -> dict[str, Any]:
     """Step 4: Generate actual ledger or validate existing."""
     result: dict[str, Any] = {"step": "actual_ledger", "status": "NOT_STARTED"}
@@ -281,14 +282,24 @@ def step_load_or_run_actual_ledger(
         result["status"] = "EXISTING"
     else:
         try:
-            from scripts.run_p34_actual_ledger_alignment import run_actual_ledger_alignment
-            al = run_actual_ledger_alignment(work_dir=work_dir)
-            if al.get("status") == "P34_ACTUAL_LEDGER_READY":
+            from scripts.run_p34_actual_ledger_alignment import build_actual_ledger
+            al = build_actual_ledger(
+                raw_data=raw_data,
+                start_day=None,
+                end_day=None,
+                work_dir=work_dir,
+                output_dir=os.path.join(work_dir, "ledger"),
+                force=force,
+            )
+            if al.get("p34_status") == "P34_ACTUAL_LEDGER_READY":
                 result["rows"] = _csv_row_count(actual_path)
                 result["status"] = "GENERATED"
             else:
                 result["status"] = "FAILED"
-                result["error"] = f"Actual ledger status: {al.get('status')}"
+                result["error"] = (
+                    f"Actual ledger build: {al.get('p34_status')} — "
+                    f"{al.get('reason_codes', [])}"
+                )
         except Exception as e:
             result["status"] = "FAILED"
             result["error"] = str(e)
@@ -325,20 +336,23 @@ def step_load_or_run_prediction_ledger(
         result["hash"] = _file_hash(pred_path)
         result["status"] = "EXISTING"
     else:
-        # Try to generate via P33
+        # Try to generate via P33 multi-model ledger builder
         try:
-            from scripts.run_p33_prediction_ledger_backfill import run_prediction_ledger_backfill
-            pl = run_prediction_ledger_backfill(
+            from scripts.run_p33_multimodel_prediction_ledger import build_prediction_ledger
+            pl = build_prediction_ledger(
                 work_dir=work_dir,
-                target_date=target_date,
-                trusted_models=trusted_models,
+                output_dir=os.path.join(work_dir, "ledger"),
+                force=force,
             )
-            if pl.get("status") == "P33_PREDICTION_LEDGER_READY":
+            if pl.get("p33_status") == "P33_LEDGER_BUILT":
                 result["rows"] = _csv_row_count(pred_path)
                 result["status"] = "GENERATED"
             else:
                 result["status"] = "FAILED"
-                result["error"] = f"Prediction ledger status: {pl.get('status')}"
+                result["error"] = (
+                    f"Prediction ledger build failed: {pl.get('p33_status')} — "
+                    f"{pl.get('reason_codes', [])}"
+                )
         except ImportError:
             result["status"] = "FAILED"
             result["error"] = "Prediction ledger not found and P33 runner unavailable"
@@ -957,7 +971,7 @@ def run_delivery_chain(
         ("raw_data_check", lambda: step_raw_data_check(raw_data, work_dir, force)),
         ("source_repo_check", lambda: step_source_repo_check(source_repo, work_dir, force)),
         ("trust_gate", lambda: step_load_or_run_trust_gate(work_dir, force, trusted_models)),
-        ("actual_ledger", lambda: step_load_or_run_actual_ledger(work_dir, force)),
+        ("actual_ledger", lambda: step_load_or_run_actual_ledger(work_dir, force, raw_data)),
     ]
 
     # Prediction ledger needs target_date from trust_gate result

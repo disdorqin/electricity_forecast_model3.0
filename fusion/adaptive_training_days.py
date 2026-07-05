@@ -104,31 +104,31 @@ def select_complete_training_days(
         )
         return result
 
-    # ── Load ledgers ──────────────────────────────────────────────
-    try:
-        pred_df = pd.read_parquet(prediction_ledger_path)
-    except FileNotFoundError:
-        result["errors"].append(
-            f"prediction ledger not found: {prediction_ledger_path}"
-        )
-        return result
-    except Exception as exc:
-        result["errors"].append(
-            f"failed to read prediction ledger: {exc}"
-        )
+    # ── Load ledgers (parquet preferred, CSV fallback) ───────────
+    def _load_ledger(path: str, label: str) -> pd.DataFrame | None:
+        """Try parquet first, then CSV.  Returns None on failure."""
+        try:
+            return pd.read_parquet(path)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            # Not parquet — try CSV
+            pass
+        try:
+            return pd.read_csv(path)
+        except FileNotFoundError:
+            result["errors"].append(f"{label} not found: {path}")
+            return None
+        except Exception as exc:
+            result["errors"].append(f"failed to read {label}: {exc}")
+            return None
+
+    pred_df = _load_ledger(prediction_ledger_path, "prediction ledger")
+    if pred_df is None:
         return result
 
-    try:
-        act_df = pd.read_parquet(actual_ledger_path)
-    except FileNotFoundError:
-        result["errors"].append(
-            f"actual ledger not found: {actual_ledger_path}"
-        )
-        return result
-    except Exception as exc:
-        result["errors"].append(
-            f"failed to read actual ledger: {exc}"
-        )
+    act_df = _load_ledger(actual_ledger_path, "actual ledger")
+    if act_df is None:
         return result
 
     if len(pred_df) == 0:
