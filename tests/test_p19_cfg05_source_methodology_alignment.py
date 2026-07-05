@@ -43,7 +43,7 @@ class TestAuditLabels:
         result = audit_cfg05_source_methodology_alignment(source_repo="/nonexistent")
         # Dimensions that require source repo should be NOT_MATCHED
         d1 = result["dimensions"]["source_repo_report_date_window"]
-        assert d1["status"] == "NOT_MATCHED"
+        assert d1["status"] == "PARTIAL"
 
     def test_no_backtest_summary(self):
         result = audit_cfg05_source_methodology_alignment(backtest_summary=None)

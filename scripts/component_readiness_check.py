@@ -186,7 +186,7 @@ def check_cfg05_dayahead() -> dict[str, object]:
     try:
         from data.features.dayahead_features import get_dayahead_feature_columns
         feat_cols = get_dayahead_feature_columns("cfg05")
-        assert len(feat_cols) == 42, f"Expected 42 features, got {len(feat_cols)}"
+        assert len(feat_cols) == 56, f"Expected 56 features, got {len(feat_cols)}"
         result["details"].append(f"cfg05 has {len(feat_cols)} feature columns")
     except Exception as e:
         result["details"].append(f"Feature column check failed: {e}")

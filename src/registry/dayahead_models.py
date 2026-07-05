@@ -103,18 +103,35 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
         "champion": True,
         "sMAPE_floor50": 11.4838,
         "feature_columns": [
+            # Base (24)
             "hour", "month", "day_of_week", "is_weekend",
             "lag_price_target", "lag_price_week",
             "load", "wind", "solar", "interconnect", "bidding_space", "space_ratio",
             "net_load", "solar_ratio", "net_load_sq", "wind_ratio", "renew_penetration",
             "ramp_load", "ramp_solar", "morning_mean", "noon_min", "morning_std",
             "morning_trend", "is_info_fresh",
+            # Extended lags (5)
             "lag_24h", "lag_48h", "lag_72h", "lag_168h", "lag_336h",
+            # Same-hour stats (5)
             "same_hour_mean_7d", "same_hour_mean_14d", "same_hour_std_7d",
             "same_hour_max_7d", "same_hour_min_7d",
+            # Momentum + ranks (3)
             "price_momentum_24_168", "net_load_rank_30d", "bidding_space_rank_30d",
+            # Calendar (5)
             "is_spring_festival_window", "days_to_spring_festival",
             "days_after_spring_festival", "is_month_start", "is_month_end",
+            # v3: Volatility (2)
+            "price_volatility_24h", "price_volatility_168h",
+            # v3: Additional ranks (2)
+            "renewable_penetration_rank_30d", "load_ramp_rank_30d",
+            # v3: Change features (3)
+            "bidding_space_change_24h", "net_load_change_24h", "renewable_change_24h",
+            # v3: Exact spring festival (3)
+            "is_spring_festival_exact", "days_to_spring_festival_exact",
+            "days_after_spring_festival_exact",
+            # v3: Interaction features (4)
+            "hour_x_bidding_space", "hour_x_net_load",
+            "period_x_bidding_space", "period_x_renewable_penetration",
         ],
     },
     "best_two_average": {

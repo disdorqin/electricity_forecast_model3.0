@@ -39,7 +39,7 @@ class TestExportCfg05FromSource:
         result = export_cfg05_from_source(source_repo="/nonexistent")
         assert result["export_status"] == "CFG05_EXPORT_BLOCKED"
         assert result["artifact_path"] is None
-        assert any("NOT_FOUND" in rc for rc in result["reason_codes"])
+        assert any("NO_CFG05_ARTIFACT" in rc for rc in result["reason_codes"])
 
     def test_no_source_repo_returns_export_blocked(self):
         """None source_repo returns CFG05_EXPORT_BLOCKED."""

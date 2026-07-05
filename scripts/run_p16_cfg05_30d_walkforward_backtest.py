@@ -273,6 +273,7 @@ def run_p16_cfg05_30d_walkforward_backtest(
     reuse_model: bool = True,
     feature_columns: Optional[list[str]] = None,
     device: str = "cpu",
+    feature_version: str = "v2",
 ) -> dict[str, Any]:
     """Run cfg05 30-day walk-forward backtest.
 
@@ -295,6 +296,8 @@ def run_p16_cfg05_30d_walkforward_backtest(
         If False, retrain for each day (true walk-forward).
     feature_columns : list[str], optional
         Override feature columns (default: CFG05_FEATURE_COLUMNS).
+    feature_version : str
+        Feature builder version: "v2" (default, 40 cols) or "v3" (54 cols).
 
     Returns
     -------
@@ -350,10 +353,17 @@ def run_p16_cfg05_30d_walkforward_backtest(
     if os.path.isdir(source_repo):
         try:
             data_loader = _import_source_module(source_repo, "src.common.data_loader")
-            feature_builder = _import_source_module(source_repo, "src.common.feature_builder_dayahead")
-            df_raw = data_loader.load_data(raw_data, target="dayahead")
-            df_feat = feature_builder.build_features_dayahead(df_raw, use_extended=True)
-            result["reason_codes"].append(f"SOURCE_FEATURES_BUILT:{len(df_feat)}_rows")
+            if feature_version == "v3":
+                feature_builder = _import_source_module(source_repo, "src.common.feature_builder_dayahead_v3")
+                df_raw = data_loader.load_data(raw_data, target="dayahead")
+                df_feat = feature_builder.build_features_dayahead_v3(df_raw)
+                result["reason_codes"].append(f"SOURCE_V3_FEATURES_BUILT:{len(df_feat)}_rows")
+            else:
+                feature_builder = _import_source_module(source_repo, "src.common.feature_builder_dayahead")
+                df_raw = data_loader.load_data(raw_data, target="dayahead")
+                df_feat = feature_builder.build_features_dayahead(df_raw, use_extended=True)
+                result["reason_codes"].append(f"SOURCE_FEATURES_BUILT:{len(df_feat)}_rows")
+            result["feature_version"] = feature_version
         except Exception as e:
             result["reason_codes"].append(f"SOURCE_FEATURE_BUILD_FAILED:{e}")
 
@@ -621,6 +631,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Retrain model for each day (true walk-forward).")
     p.add_argument("--device", type=str, default="cpu",
                    help="LightGBM device: cpu or gpu.")
+    p.add_argument("--feature-version", type=str, default="v2", choices=["v2", "v3"],
+                   help="Feature builder version: v2 (40 cols) or v3 (54 cols).")
     p.add_argument("--json", action="store_true", default=False)
     p.add_argument("--strict", action="store_true", default=False)
     p.add_argument("--verbose", "-v", action="store_true", default=False)
@@ -647,6 +659,7 @@ def main(argv: list[str] | None = None) -> int:
         work_dir=work_dir,
         reuse_model=not args.no_reuse_model,
         device=args.device,
+        feature_version=args.feature_version,
     )
 
     if args.json:

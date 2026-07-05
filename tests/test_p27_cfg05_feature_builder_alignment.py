@@ -20,13 +20,13 @@ def test_p27_alignment_labels():
 
 def test_p27_cfg05_feature_count():
     from models.adapters.cfg05_dayahead_lgbm import CFG05_FEATURE_COLUMNS
-    assert len(CFG05_FEATURE_COLUMNS) == 42
+    assert len(CFG05_FEATURE_COLUMNS) == 56
 
 
 def test_p27_get_cfg05_features():
     from scripts.audit_p27_cfg05_feature_builder_alignment import _get_cfg05_features
     feats = _get_cfg05_features()
-    assert len(feats) == 42
+    assert len(feats) == 56
     assert "hour" in feats
     assert "lag_price_target" in feats
 

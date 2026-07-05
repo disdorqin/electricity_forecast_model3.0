@@ -63,10 +63,16 @@ def run_p26_cfg05_per_day_retrain_backtest(
     train_window_days: int = 90,
     work_dir: Optional[str] = None,
     device: str = "cpu",
+    feature_version: str = "v2",
 ) -> dict[str, Any]:
     """Run cfg05 per-day retrain walk-forward backtest.
 
     Delegates to P16 with ``reuse_model=False`` to force retraining for each day.
+
+    Parameters
+    ----------
+    feature_version : str
+        Feature builder version: "v2" (40 cols) or "v3" (54 cols).
 
     Returns
     -------
@@ -82,6 +88,7 @@ def run_p26_cfg05_per_day_retrain_backtest(
 
     result: dict[str, Any] = {
         "p26_mode": "per_day_retrain",
+        "feature_version": feature_version,
         "raw_data": raw_data,
         "source_repo": source_repo,
         "eval_start": start_day,
@@ -123,6 +130,7 @@ def run_p26_cfg05_per_day_retrain_backtest(
         work_dir=work_dir,
         reuse_model=False,  # KEY: per-day retrain
         device=device,
+        feature_version=feature_version,
     )
     elapsed = time.time() - t0
     result["training_time_seconds"] = round(elapsed, 2)
@@ -242,6 +250,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--work-dir", type=str, default=None)
     p.add_argument("--device", type=str, default="cpu",
                    help="LightGBM device: cpu or gpu.")
+    p.add_argument("--feature-version", type=str, default="v2", choices=["v2", "v3"],
+                   help="Feature builder version: v2 (40 cols) or v3 (54 cols).")
     p.add_argument("--json", action="store_true", default=False)
     p.add_argument("--strict", action="store_true", default=False)
     p.add_argument("--verbose", "-v", action="store_true", default=False)
@@ -267,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         train_window_days=args.train_window_days,
         work_dir=work_dir,
         device=args.device,
+        feature_version=args.feature_version,
     )
 
     if args.json:

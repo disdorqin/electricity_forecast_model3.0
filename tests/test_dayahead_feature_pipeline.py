@@ -44,7 +44,7 @@ class TestFeatureColumns:
     def test_cfg05_has_42_features(self):
         """cfg05 has exactly 42 feature columns."""
         cols = get_dayahead_feature_columns("cfg05")
-        assert len(cols) == 42
+        assert len(cols) == 56
 
     def test_cfg05_features_from_registry(self):
         """cfg05 feature columns include key expected features."""
@@ -155,14 +155,14 @@ class TestReportMissingFeatures:
         assert "missing" in report
         assert "ratio" in report
         assert report["model_id"] == "cfg05"
-        assert report["total_features"] == 42
+        assert report["total_features"] == 56
 
     def test_ratio_reflects_present_features(self, minimal_df):
         """Ratio reflects the proportion of present features."""
         report = report_missing_features(minimal_df, model_id="cfg05")
         # minimal_df has: hour, month, day_of_week, is_weekend + ds = 4 features
         assert len(report["present"]) == 4
-        assert report["ratio"] == 4 / 42
+        assert report["ratio"] == 4 / 56
 
 
 class TestGetFeatureColumns:
