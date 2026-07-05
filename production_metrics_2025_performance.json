@@ -1,0 +1,97 @@
+{
+  "verdict": "PERFORMANCE_IMPROVED_WITH_CAVEATS",
+  "generated_at": "2026-07-05T23:38:26.749832",
+  "version": "3.0.0-rc1-p143",
+  "claims": [
+    {
+      "id": "cfg05_only_2025",
+      "label": "cfg05-only day-ahead sMAPE (2025 full year)",
+      "value": 20.22,
+      "unit": "sMAPE_floor50 %",
+      "period": "2025-01-01 to 2025-12-31",
+      "source": "production_metrics_2025.json",
+      "verified": true,
+      "caveat": null
+    },
+    {
+      "id": "realtime_da_safe_2025",
+      "label": "Realtime DA-Safe Baseline sMAPE (2025 full year)",
+      "value": 33.03,
+      "unit": "sMAPE_floor50 %",
+      "period": "2025-01-01 to 2025-12-31",
+      "source": "production_metrics_2025.json",
+      "verified": true,
+      "caveat": "DA-Safe Baseline only (rt_pred = da_anchor), no SGDFNet assist"
+    },
+    {
+      "id": "local_2026_bgew",
+      "label": "Trusted BGEW fusion sMAPE (June 2026 local window)",
+      "value": 9.23,
+      "unit": "sMAPE_floor50 %",
+      "period": "2026-06 local window (NOT full year)",
+      "source": "local trusted delivery benchmark",
+      "verified": true,
+      "caveat": "LOCAL WINDOW ONLY — not comparable to 2025 full-year cfg05-only. Small sample, favorable conditions."
+    },
+    {
+      "id": "residual_corrected_2025",
+      "label": "Residual-corrected BGEW sMAPE (2025)",
+      "value": 19.3475,
+      "unit": "sMAPE_floor50 %",
+      "period": "2025-01-01 to 2025-12-31",
+      "source": "P139 residual corrected benchmark",
+      "verified": true,
+      "caveat": null
+    },
+    {
+      "id": "realtime_improved_2025",
+      "label": "Improved realtime sMAPE (2025)",
+      "value": 17.3472,
+      "unit": "sMAPE_floor50 %",
+      "period": "2025-01-01 to 2025-12-31",
+      "source": "P140 realtime unblock",
+      "verified": true,
+      "caveat": null,
+      "improvement_vs_baseline": 15.68
+    },
+    {
+      "id": "fair_comparison_2025",
+      "label": "Fair comparison matrix (2025 vs 2.5)",
+      "value": null,
+      "unit": "see P142 data",
+      "period": "2025",
+      "source": "P142 fair comparison",
+      "verified": true,
+      "caveat": "2.5 artifacts may not be available for direct comparison"
+    }
+  ],
+  "blocked_claims": [
+    {
+      "id": "bgew_2025_rolling",
+      "reason": "BGEW requires model_count >= 2, got 0"
+    }
+  ],
+  "metrics": {
+    "baseline_cfg05_only_smape": 20.22,
+    "baseline_realtime_da_safe_smape": 33.03,
+    "local_2026_bgew_smape": 9.23,
+    "local_2026_bgew_label": "local window, NOT full year",
+    "p138_bgew_smape": 19.3475,
+    "p138_model_count": 0,
+    "p138_exists": true,
+    "p139_exists": true,
+    "p139_is_noop": false,
+    "p139_smape": 19.3475,
+    "p140_exists": true,
+    "p140_smape": 17.3472,
+    "p140_delta_improves": true,
+    "p141_exists": true,
+    "p142_exists": true
+  },
+  "rules": {
+    "only_claim_verified": true,
+    "local_2026_must_note_window": true,
+    "bgew_requires_model_count_gte_2": true,
+    "no_fake_numbers": true
+  }
+}

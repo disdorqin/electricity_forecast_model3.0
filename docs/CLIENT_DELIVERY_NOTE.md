@@ -1,4 +1,4 @@
-# Client Delivery Note — Electricity Price Forecasting System v3.0.0-rc1
+# Client Delivery Note — Electricity Price Forecasting System v3.0.0-rc1-p143
 
 ## What This Is
 
@@ -25,17 +25,19 @@ python main.py \
     --json
 ```
 
-## Key Metrics
+## Key Metrics (Verified — P143)
 
-| Component | sMAPE |
-|-----------|-------|
-| cfg05 baseline | 9.90% |
-| Trusted BGEW fusion | 9.23% |
-| DA-Safe Realtime | Metric pending / evaluated separately |
+| Component | sMAPE | Period | Notes |
+|-----------|-------|--------|-------|
+| cfg05-only day-ahead sMAPE (2025 full year) | 20.22% | 2025-01-01 to 2025-12-31 |  |
+| Realtime DA-Safe Baseline sMAPE (2025 full year) | 33.03% | 2025-01-01 to 2025-12-31 | DA-Safe Baseline only (rt_pred = da_anchor), no SGDFNet assi |
+| Trusted BGEW fusion sMAPE (June 2026 local window) | 9.23% | 2026-06 local window (NOT | LOCAL WINDOW ONLY — not comparable to 2025 full-year cfg05-o |
+| Residual-corrected BGEW sMAPE (2025) | 19.3475% | 2025-01-01 to 2025-12-31 |  |
+| Improved realtime sMAPE (2025) | 17.3472% | 2025-01-01 to 2025-12-31 |  |
 
 ## Current Status
 
-`FINAL_REAL_INTEGRATED_GO_WITH_CAVEATS`
+`PERFORMANCE_IMPROVED_WITH_CAVEATS`
 
 ## Important Caveats
 
