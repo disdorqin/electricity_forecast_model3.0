@@ -66,6 +66,7 @@ def run_full_chain(
     work_dir: Optional[str] = None,
     strict: bool = False,
     strict_no_leakage: bool = False,
+    strict_full_production: bool = False,
     train_realtime_if_missing: bool = False,
     reuse_artifacts: bool = False,
     fast_dev_run: bool = False,
@@ -96,6 +97,7 @@ def run_full_chain(
         "work_dir": work_dir,
         "strict": strict,
         "strict_no_leakage": strict_no_leakage,
+        "strict_full_production": strict_full_production,
         "steps": {},
         "step_order": [],
         "overall_status": "NOT_STARTED",
@@ -396,6 +398,26 @@ def run_full_chain(
         caveats.append("ADAPTIVE_LEARNER_DEGRADED")
 
     result["caveats"] = caveats
+
+    # P102: strict-full-production check
+    if strict_full_production:
+        from artifacts.production_registry import run_production_registry
+        registry_config = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config", "production_artifacts.yaml",
+        )
+        reg = run_production_registry(config_path=registry_config)
+        if reg.get("go_blockers"):
+            for b in reg["go_blockers"]:
+                result["errors"].append(f"STRICT_FULL_PRODUCTION_BLOCKER: {b}")
+        # Check for classification as rule/fallback
+        clf_step = result["steps"].get("classifier", {})
+        if clf_step.get("status") in ("CLASSIFIER_RULE_FALLBACK", "CLASSIFIER_FAILED"):
+            result["warnings"].append("STRICT_FULL_PRODUCTION: classifier is rule fallback")
+            caveats.append("CLASSIFIER_RULE_FALLBACK")
+        # Check SGDFNet
+        if "SGDFNet" not in str(caveats) and "code-only" not in str(result.get("steps", {})):
+            pass  # SGDFNet assist considered optional per production config
 
     # Final status determination
     if result["errors"]:
@@ -770,6 +792,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--work-dir", type=str, default=None)
     p.add_argument("--strict", action="store_true")
     p.add_argument("--strict-no-leakage", action="store_true")
+    p.add_argument("--strict-full-production", action="store_true")
     p.add_argument("--train-realtime-if-missing", action="store_true")
     p.add_argument("--reuse-artifacts", action="store_true")
     p.add_argument("--fast-dev-run", action="store_true")
@@ -802,6 +825,7 @@ def main(argv: list[str] | None = None) -> int:
         work_dir=args.work_dir,
         strict=args.strict,
         strict_no_leakage=args.strict_no_leakage,
+        strict_full_production=args.strict_full_production,
         train_realtime_if_missing=args.train_realtime_if_missing,
         reuse_artifacts=args.reuse_artifacts,
         fast_dev_run=args.fast_dev_run,

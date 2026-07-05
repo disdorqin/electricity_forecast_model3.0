@@ -1,0 +1,100 @@
+# production_artifacts.yaml — P97: Production Artifact Registry
+#
+# Defines every model artifact required for FINAL_REAL_INTEGRATED_GO.
+# Each entry declares whether it is required_for_go, where to look,
+# and what status to assign if missing.
+
+version: "3.0-production"
+
+dayahead:
+  cfg05:
+    required_for_go: true
+    type: lightgbm
+    artifact_paths:
+      - ".local_artifacts/models/cfg05/model.pkl"
+      - ".local_artifacts/models/cfg05/model.joblib"
+      - ".local_artifacts/p31_p40_multimodel_fusion/models/cfg05_dayahead_lgbm/cfg05_model.txt"
+      - ".local_artifacts/p90_real_integrated_chain/dayahead/cfg05_model.txt"
+    fallback_paths:
+      - ".local_artifacts/p31_p40_multimodel_fusion/ledger/predictions_cfg05_dayahead_lgbm_30d.csv"
+    status_if_missing: "NO_GO"
+
+  catboost_spike_residual:
+    required_for_go: false
+    type: catboost
+    artifact_paths:
+      - ".local_artifacts/models/catboost_spike_residual.cbm"
+      - ".local_artifacts/residual/catboost_spike_residual.cbm"
+      - ".local_artifacts/p31_p40_multimodel_fusion/models/catboost_spike_residual/catboost_spike_residual.cbm"
+    fallback_paths: []
+    status_if_missing: "GO_WITH_CAVEATS"
+
+realtime:
+  rt_da_anchor:
+    required_for_go: true
+    type: baseline
+    description: "DA-Safe Realtime Baseline — always available"
+    status_if_missing: "NO_GO"
+
+  sgdfnet_assist:
+    required_for_go: false
+    type: external_runtime
+    source_repo: "../electricity_forecast_model2.0_exp"
+    runtime_root: "../electricity_forecast_model2.0_exp/SGDFNet"
+    description: "SGDFNet assist from 2.0 exp repo — optional enhancement"
+    artifact_paths:
+      - ".local_artifacts/sgdfnet/sgdfnet_realtime_assist_pack.csv"
+      - ".local_artifacts/source_repos/electricity_forecast_deep_sgdf_delta/artifacts/delta_supply/exp_2026_02/model.pkl"
+      - ".local_artifacts/p90_real_integrated_chain/realtime/online_pack/realtime_online_pack.csv"
+    status_if_missing: "GO_WITH_CAVEATS"
+
+residual:
+  p5m_full_stack:
+    required_for_go: false
+    type: ensemble
+    description: "Full P5M residual correction stack"
+    artifact_paths:
+      - ".local_artifacts/residual/p5m_full_stack.pkl"
+      - ".local_artifacts/residual/p5m_manifest.json"
+    fallback_paths:
+      - ".local_artifacts/p31_p40_multimodel_fusion/models/catboost_spike_residual/catboost_spike_residual.cbm"
+    status_if_missing: "GO_WITH_CAVEATS"
+
+classifier:
+  negative_risk:
+    required_for_go: true
+    type: sklearn_or_xgboost
+    description: "Negative risk ML classifier"
+    artifact_paths:
+      - ".local_artifacts/classifiers/negative_risk/model.pkl"
+      - ".local_artifacts/source_repos/electricity_forecast_deep_sgdf_delta/artifacts/negative_risk/exp_2026_02/model.pkl"
+    fallback_paths: []
+    status_if_missing: "GO_WITH_CAVEATS"
+
+  spike_risk:
+    required_for_go: true
+    type: sklearn_or_xgboost
+    description: "Spike risk ML classifier"
+    artifact_paths:
+      - ".local_artifacts/classifiers/spike_risk/model.pkl"
+      - ".local_artifacts/source_repos/electricity_forecast_deep_sgdf_delta/artifacts/spike_risk/exp_2026_02/model.pkl"
+    fallback_paths: []
+    status_if_missing: "GO_WITH_CAVEATS"
+
+fusion:
+  dayahead_weights:
+    required_for_go: true
+    type: json_weights
+    description: "Day-ahead BGEW fusion weights"
+    artifact_paths:
+      - ".local_artifacts/fusion/dayahead_weights.json"
+      - ".local_artifacts/p31_p40_multimodel_fusion/period_bgew_weights.json"
+    status_if_missing: "GO_WITH_CAVEATS"
+
+  realtime_pooled_weights:
+    required_for_go: true
+    type: json_weights
+    description: "Realtime pooled 30D BGEW weights"
+    artifact_paths:
+      - ".local_artifacts/fusion/realtime_pooled_weights.json"
+    status_if_missing: "GO_WITH_CAVEATS"

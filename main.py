@@ -1,5 +1,5 @@
 """
-main.py — P74: Entry point for the full-chain electricity price prediction system.
+main.py — P74/P102: Entry point for the full-chain electricity price prediction system.
 
 Usage::
 
@@ -13,6 +13,7 @@ Usage::
         --fusion-engine period_bgew \\
         --work-dir .local_artifacts/full_chain_run \\
         --strict --strict-no-leakage \\
+        --strict-full-production    # NEW: requires all artifacts ready for FINAL_GO \\
         --train-realtime-if-missing \\
         --reuse-artifacts \\
         --json
