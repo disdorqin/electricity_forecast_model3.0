@@ -1,4 +1,5 @@
 # P20 cfg05 REAL Chain Readiness Consolidated Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 > **Phase**: P20 — Consolidated readiness report
 > **Generated**: 2026-07-04

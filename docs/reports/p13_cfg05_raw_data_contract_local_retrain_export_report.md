@@ -1,4 +1,5 @@
 # P13 cfg05 Raw Data Contract + Local Retrain/Export Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 > **Phase**: P13 — Raw Chinese CSV contract, local LightGBM training and export
 > **Generated**: 2026-07-04

@@ -1,0 +1,76 @@
+# Fusion delivery profiles
+# ========================
+# Each profile defines which models are allowed, which are excluded,
+# whether delivery claims may reference results from this profile,
+# and any forbidden claims or review requirements.
+#
+# The `trusted_delivery` profile is the default for all production use.
+
+profiles:
+
+  trusted_delivery:
+    description: >
+      Default delivery profile. Only models that passed the P41 trust gate
+      with no suspicion criteria triggered are included.
+    allowed_models:
+      - lightgbm_cfg05_dayahead
+      - catboost_spike_residual
+    excluded_models:
+      stage3_business_fixed: SUSPECT_LEAKAGE
+      best_two_average: CONSERVATIVE_CORR_GATE
+      catboost_sota: CONSERVATIVE_CORR_GATE
+    delivery_allowed: true
+    default: true
+    forbidden_claims:
+      - production_sMAPE_2_97
+      - production_improvement_69_96
+      - stage3_production_readiness
+      - source_11_48_reproduced
+    allowed_claims:
+      - cfg05_baseline_9_90
+      - trusted_fusion_9_23
+      - improvement_6_79_vs_cfg05
+
+  balanced_candidate:
+    description: >
+      Research profile that includes best_two_average and catboost_sota
+      which were flagged only by a conservative correlation gate. These
+      models show 4-5% sMAPE and are likely production-safe, but require
+      manual review before delivery claims.
+    allowed_models:
+      - lightgbm_cfg05_dayahead
+      - best_two_average
+      - catboost_sota
+      - catboost_spike_residual
+    excluded_models:
+      stage3_business_fixed: SUSPECT_LEAKAGE
+    delivery_allowed: false
+    requires_manual_review: true
+    forbidden_claims:
+      - production_sMAPE_2_97
+      - production_improvement_69_96
+    allowed_claims:
+      - balanced_fusion_sMAPE_approx_5
+
+  research_all_models:
+    description: >
+      Full 5-model pool including stage3_business_fixed (confirmed
+      source-repo training leakage). Results from this profile are for
+      research reference only and must never be cited as production metrics.
+    allowed_models:
+      - lightgbm_cfg05_dayahead
+      - best_two_average
+      - stage3_business_fixed
+      - catboost_sota
+      - catboost_spike_residual
+    excluded_models: {}
+    delivery_allowed: false
+    forbidden_claims:
+      - production_sMAPE_2_97
+      - production_improvement_69_96
+      - stage3_production_readiness
+      - source_11_48_reproduced
+    required_caveats:
+      - research only
+      - not delivery
+      - stage3 leakage caveat

@@ -1,4 +1,5 @@
 # P14 Raw CSV Intake + cfg05 REAL Runbook Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 > **Phase**: P14 — One-command raw CSV intake, schema inspection, and cfg05 REAL run
 > **Generated**: 2026-07-04

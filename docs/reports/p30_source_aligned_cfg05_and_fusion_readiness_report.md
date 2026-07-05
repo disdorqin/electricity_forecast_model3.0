@@ -1,4 +1,5 @@
 ## P30 Source-Aligned cfg05 + Fusion Readiness Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 ### 1. Executive Status
 

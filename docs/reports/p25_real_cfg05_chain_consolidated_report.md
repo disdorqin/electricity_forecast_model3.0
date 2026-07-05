@@ -1,4 +1,5 @@
 # P25 Real cfg05 Chain Consolidated Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 > **Phase**: P25 — Real data execution + consolidated report
 > **Generated**: 2026-07-04

@@ -1,4 +1,5 @@
 # P19 cfg05 Source Methodology Alignment Report
+> **Research Only** — This report documents pre-leakage-discovery work. Results are not delivery claims. "not delivery"
 
 > **Phase**: P19 — source methodology alignment audit
 > **Generated**: 2026-07-04

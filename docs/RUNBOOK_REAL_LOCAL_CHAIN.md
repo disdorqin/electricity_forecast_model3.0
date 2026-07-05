@@ -2,13 +2,30 @@
 
 ## Overview
 
-End-to-end command sequence for training, backtesting, and fusing day-ahead electricity price predictions locally. All artifacts are stored under `.local_artifacts/p31_p40_multimodel_fusion/`.
+End-to-end command sequence for training, backtesting, and fusing day-ahead electricity price predictions locally. All artifacts are stored under `.local_artifacts/`.
+
+**Default delivery profile**: `trusted_delivery` (cfg05 + catboost_spike_residual)
+
+## Quick Start — One-Command Runner
+
+The simplest way to run the full delivery pipeline:
+
+```bash
+python -m scripts.run_delivery_local_chain \
+    --raw-data ../data/shandong_pmos_hourly.csv \
+    --source-repo .local_artifacts/source_repos/epf-sota-experiment \
+    --profile trusted_delivery \
+    --start-day 2026-06-01 \
+    --end-day 2026-06-30 \
+    --work-dir .local_artifacts/delivery_run \
+    --json --strict
+```
 
 ## Prerequisites
 
 ```bash
 # Ensure dependencies
-pip install lightgbm catboost pandas numpy
+pip install lightgbm catboost pandas numpy pyyaml
 ```
 
 ## Phase-by-Phase Commands
@@ -111,37 +128,58 @@ python -m scripts.run_p36_fusion_backtest --json
 python -m scripts.run_p38_fused_full_chain --target-day 2026-06-30 --json
 ```
 
-## P41-P45: Trusted Fusion Delivery (Default Profile)
+## P41-P49: Delivery Gate & Guard
 
-The delivery default is the **trusted_no_stage3** profile. Run in order:
+### Trust Gate (P41)
 
 ```bash
-# P41 — Model trust gate (flags SUSPECT_LEAKAGE models)
 python -m scripts.run_p41_model_trust_gate --json --strict
+```
 
-# P42 — Trusted fusion backtest (excludes quarantined models)
+### Trusted Fusion Backtest (P42)
+
+```bash
 python -m scripts.run_p42_trusted_fusion_backtest --json
+```
 
-# P43 — Rolling weight validation (no-lookahead verification)
+### Rolling Validation (P43)
+
+```bash
 python -m scripts.run_p43_rolling_weight_fusion_validation --json --strict
+```
 
-# P44 — Delivery readiness packager (assembles P41-P43)
+### Delivery Packager (P44)
+
+```bash
 python -m scripts.run_p44_delivery_readiness_packager --json
 ```
 
-### Profiles
+### Claim Guard (P46)
 
-| Profile | Models | Delivery Allowed | Use Case |
-|---------|--------|-----------------|----------|
-| `trusted_no_stage3` | cfg05 + catboost_spike_residual | ✅ Yes | **Default production** |
-| `research_all_models` | All 5 (incl. stage3) | ❌ No | Research reproduction |
+```bash
+python -m scripts.validate_delivery_claims --json --strict
+```
 
-### Important Notes
+### Final Audit (P49)
+
+```bash
+python -m scripts.run_p49_final_delivery_audit --json --strict
+```
+
+## Delivery Profiles
+
+| Profile | Models | Delivery Allowed | Default |
+|---------|--------|-----------------|---------|
+| `trusted_delivery` | cfg05 + catboost_spike_residual | ✅ Yes | ✅ Yes |
+| `balanced_candidate` | cfg05 + best_two_average + catboost_sota + catboost_spike_residual | ❌ Manual review | ❌ |
+| `research_all_models` | All 5 (incl. stage3) | ❌ No | ❌ |
+
+## Important Notes
 
 - **stage3_business_fixed** excluded due to source-repo training leakage (sMAPE=0.39%, 82.5% within 1%)
-- **best_two_average** and **catboost_sota** excluded (corr > 0.995) — good models but conservative gate
+- **best_two_average** and **catboost_sota** excluded (corr > 0.995) — conservative safety gate
 - Trusted pool is only 2 models, so fusion improvement is modest (~6.79%)
-- Research results (69.96%, 2.97%) are NOT delivery claims
+- **Research results (69.96%, 2.97%) are NOT delivery claims**
 
 ## Artifact Layout
 
