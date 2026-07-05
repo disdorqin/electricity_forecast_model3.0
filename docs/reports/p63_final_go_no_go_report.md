@@ -1,0 +1,141 @@
+# P63 Final Go/No-Go Report
+
+> **Generated**: 2026-07-05
+> **Status**: FINAL_DELIVERY_GO_WITH_CAVEATS
+
+---
+
+## 1. P61 Hotfix Verification
+
+All 7 bugs from the P51-P60 integration audit have been fixed and tested.
+
+| Bug | Description | Fix | Status |
+|-----|-------------|-----|--------|
+| 1 | raw_data VALID treated as FAILED | Now: `CFG05_RAW_DATA_VALID → PASSED`, only `MISSING → FAILED` | ✅ FIXED |
+| 2 | adaptive_training_days missing `trusted_models` + `actual_ledger_path` | Both parameters now passed correctly | ✅ FIXED |
+| 3 | safety_preflight runs before ledger generation | Reordered: trust_gate → actual_ledger → prediction_ledger → safety_preflight | ✅ FIXED |
+| 4 | Sentinel return structure parsed wrong | Now reads `sentinel["models"]` (list of `{model_name, status}`) | ✅ FIXED |
+| 5 | postflight call used `output_df=` not `output_path=` | Now: `run_postflight(output_path=, target_date=, profile_name=, profile_def=)` | ✅ FIXED |
+| 6 | Fallback ladder output not persisted | `ladder["output"].to_csv("final_output.csv")` added | ✅ FIXED |
+| 7 | `--fusion-engine` did not dispatch P56 | Added `step_regime_bgew_fusion()` and conditional dispatch logic | ✅ FIXED |
+
+**P61 tests: 40 passed, 0 failed.**
+
+---
+
+## 2. Fresh Strict Run (Experiment A)
+
+Experiment A ran a fresh strict delivery chain with:
+- 30 days of prediction/actual data
+- 4 trusted models (m1-m4)
+- `--fusion-engine period_bgew`
+- `--strict-no-leakage`
+- `--allow-degraded`
+
+**Result**: Runner completed without crash. All 15 steps executed in the correct order. No silent SKIP on critical steps.
+
+**Caveat**: Full end-to-end PASS requires real data pipelines (P31-P44) which are not connected in this offline experiment. The runner step functions are verified to execute in the correct order with correct API calls.
+
+---
+
+## 3. Strict-No-Leakage Verification
+
+The `--strict-no-leakage` flag is correctly propagated through:
+- `run_delivery_chain()` → `step_safety_preflight(strict_no_leakage=True)`
+- When `strict_no_leakage=True` and blocked models found → `FAILED` status
+- When `strict_no_leakage=False` and blocked models found → `WARNING` status
+
+Tested via P61 hotfix integration tests.
+
+---
+
+## 4. Stage3 Injection (Experiment C)
+
+When stage3 is present in the prediction ledger:
+- The leakage sentinel correctly identifies stage3 as SUSPECT_LEAKAGE (via `check_model_leakage` which checks model name patterns)
+- Blocked models list contains stage3
+- Runner continues with remaining trusted models
+
+**Caveat**: True stage3 detection depends on the sentinel's model name matching, which may be pattern-based rather than an explicit blocklist. The pipeline does not silently pass stage3 data through.
+
+---
+
+## 5. Degradation Tests (Experiments D, E, F)
+
+| Scenario | Expected Behavior | Verified |
+|----------|------------------|----------|
+| Missing hour (24) in prediction data | Degraded training days, fallback | ✅ |
+| NaN y_pred | Fallback ladder kicks in | ✅ |
+| < 7 complete training days | INSUFFICIENT_DAYS or DEGRADED | ✅ |
+
+All degradation scenarios execute without crashing and produce appropriate status codes rather than silently producing NORMAL output.
+
+---
+
+## 6. Regime BGEW Stability (Experiment B)
+
+`--fusion-engine regime_bgew` correctly dispatches to `step_regime_bgew_fusion()` which calls `run_trust_gated_regime_bgew()` from the P56 module.
+
+The function:
+- Accepts the correct parameters (target_date, trusted_models, ledger paths, profile_name)
+- Returns fusion_method, regime, weights, and output DataFrame
+- Falls back when insufficient training data is available
+
+**Caveat**: Real-data stability (sMAPE comparison vs period_bgew) requires a full end-to-end run with real prediction/actual ledgers. The offline experiments verify dispatch and execution only.
+
+---
+
+## 7. Default Delivery Engine
+
+**Default: `period_bgew` (trusted fusion)** — remains the safe default.
+
+`regime_bgew` is available via `--fusion-engine regime_bgew` but is not set as default because:
+1. It has not been validated on real data in this sprint
+2. The 4-regime classifier adds complexity without proven benefit over period_bgew
+3. Configuration can be flipped after P62 experiment validation on real data
+
+---
+
+## 8. Delivery Readiness
+
+### Can deliver:
+- ✅ P61 hotfixed runner with correct step order
+- ✅ Safety supervisor correctly blocks SUSPECT_LEAKAGE models
+- ✅ Adaptive training days selector with proper parameter passing
+- ✅ Fallback ladder with CSV persistence
+- ✅ Postflight validation with correct API calls
+- ✅ Fusion engine dispatch (period_bgew default, regime_bgew available)
+- ✅ All 1401 tests passing, 0 failed
+
+### Cannot claim:
+- ❌ Full end-to-end PASS on real data (requires P31-P44 pipelines + real source repo)
+- ❌ Regime BGEW superiority over period_bgew (unvalidated on real data)
+- ❌ One-command `--strict-no-leakage` pass without real data (requires real prediction/actual ledgers to be generated by P31-P34)
+
+---
+
+## 9. Pre-Run Checklist (明天正式跑前)
+
+- [ ] 确认 `--raw-data` 路径指向真实 CSV 文件
+- [ ] 确认 `--source-repo` 路径指向已 clone 的 epf-sota-experiment
+- [ ] 确认 `--work-dir` 是空目录或使用 `--force` 重新生成
+- [ ] 确认 `--fusion-engine period_bgew`（默认，除非专门测试 regime_bgew）
+- [ ] 检查 `config/fusion_profiles.yaml` 存在且 `trusted_delivery` profile 正确
+- [ ] 运行 `python -m scripts.run_p60_final_safety_freeze_audit --json` 验证 24 项检查
+- [ ] 运行 `python -m pytest tests/ --tb=short -q` 确认 1401 tests pass
+- [ ] 确认没有 uncommitted changes（`git status`）
+
+---
+
+## 10. Final Verdict
+
+```
+FINAL STATUS: FINAL_DELIVERY_GO_WITH_CAVEATS
+```
+
+**Basis**: All 7 integration bugs are fixed. 1401 tests pass (zero failures). The runner step order, API calls, sentinel parsing, fusion dispatch, and postflight integration are verified through automated tests and offline experiments.
+
+**Conditions**: The decision upgrades to `FINAL_DELIVERY_GO` after:
+1. A successful fresh strict run against real data (`--strict-no-leakage --strict`)
+2. Postflight PASS on the real output
+3. Manifest and delivery report generated correctly

@@ -169,7 +169,7 @@ class TestRunnerDryRun:
                 work_dir=tmp,
                 force=True,
             )
-            assert result["phase"] in ("P47", "P47/P57")
+            assert result["phase"] in ("P47", "P47/P57", "P47/P61")
             assert result["profile"] == "trusted_delivery"
             # Should have steps recorded
             assert len(result.get("step_order", [])) > 0
