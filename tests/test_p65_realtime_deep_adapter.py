@@ -243,4 +243,4 @@ class TestBuildOnlinePack:
 
     def test_trend_model_name(self, adapter, da_predictions):
         pack = adapter._build_online_pack(da_predictions)
-        assert (pack["trend_model_name"] == "rt_da_anchor_fallback").all()
+        assert (pack["trend_model_name"] == "rt_da_anchor_FALLBACK").all()

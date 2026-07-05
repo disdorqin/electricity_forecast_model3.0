@@ -20,6 +20,12 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 
+from adapters.negative_classifier_adapter import (
+    NegativeClassifierAdapter,
+    CLASSIFIER_ML_READY as _ADAPTER_ML_READY,
+    CLASSIFIER_RULE_FALLBACK as _ADAPTER_RULE_FALLBACK,
+)
+
 logger = logging.getLogger(__name__)
 
 # ── Status constants ──────────────────────────────────────────────────
@@ -37,6 +43,7 @@ def run_final_classifier(
     dayahead_fused: Optional[pd.DataFrame] = None,
     realtime_fused: Optional[pd.DataFrame] = None,
     work_dir: str = "",
+    source_repo_path: str = "",
 ) -> dict[str, Any]:
     """Run classification on fused predictions.
 
@@ -48,6 +55,10 @@ def run_final_classifier(
         Fused realtime predictions.
     work_dir : str
         Working directory for artifacts.
+    source_repo_path : str
+        Path to the deep_sgdf_delta source repo containing real classifier
+        artifacts (artifacts/negative_risk/ and artifacts/spike_risk/).
+        When provided, the NegativeClassifierAdapter is tried first.
 
     Returns
     -------
@@ -60,39 +71,82 @@ def run_final_classifier(
         "reason_codes": [],
     }
 
-    # Check for ML classifier artifact
-    classifier_artifact = os.path.join(work_dir, "classifier_model.pkl") if work_dir else ""
-    use_ml = os.path.isfile(classifier_artifact) if classifier_artifact else False
+    # ── Try NegativeClassifierAdapter first (when source_repo_path given) ──
+    adapter: Optional[NegativeClassifierAdapter] = None
+    adapter_ml_ready = False
 
-    if use_ml:
-        result["classifier_status"] = CLASSIFIER_ML_READY
-        result["reason_codes"].append("ML_CLASSIFIER_AVAILABLE")
-    else:
-        result["classifier_status"] = CLASSIFIER_RULE_FALLBACK
-        result["reason_codes"].append("NO_ML_CLASSIFIER_USING_RULES")
+    if source_repo_path:
+        try:
+            adapter = NegativeClassifierAdapter(
+                source_repo_path=source_repo_path,
+                work_dir=work_dir,
+            )
+            adapter.find_artifacts()
+            load_result = adapter.load_models()
 
-    # Classify dayahead
-    if dayahead_fused is not None and len(dayahead_fused) > 0:
-        da_classified = _classify_predictions(
-            dayahead_fused,
-            price_col="dayahead_price",
-            use_ml=use_ml,
-            classifier_artifact=classifier_artifact,
+            if adapter.status == CLASSIFIER_ML_READY:
+                adapter_ml_ready = True
+                result["classifier_status"] = CLASSIFIER_ML_READY
+                result["reason_codes"].append("ADAPTER_ML_CLASSIFIER_AVAILABLE")
+                logger.info(
+                    "NegativeClassifierAdapter loaded real ML models "
+                    "(negative=%s, spike=%s)",
+                    load_result["model_names"].get("negative_risk", "none"),
+                    load_result["model_names"].get("spike_risk", "none"),
+                )
+            else:
+                result["reason_codes"].append("ADAPTER_NO_REAL_MODELS_FOUND")
+                logger.info(
+                    "NegativeClassifierAdapter found no real models — "
+                    "will fall back to rule-based."
+                )
+        except Exception as exc:
+            logger.warning("NegativeClassifierAdapter failed: %s", exc)
+            result["reason_codes"].append(f"ADAPTER_FAILED:{exc}")
+            adapter = None
+
+    # ── Legacy ML classifier artifact check (when adapter not used) ──
+    if not adapter_ml_ready:
+        classifier_artifact = (
+            os.path.join(work_dir, "classifier_model.pkl") if work_dir else ""
         )
+        use_ml_legacy = os.path.isfile(classifier_artifact) if classifier_artifact else False
+
+        if use_ml_legacy:
+            result["classifier_status"] = CLASSIFIER_ML_READY
+            result["reason_codes"].append("ML_CLASSIFIER_AVAILABLE")
+        else:
+            result["classifier_status"] = CLASSIFIER_RULE_FALLBACK
+            result["reason_codes"].append("NO_ML_CLASSIFIER_USING_RULES")
+
+    # ── Classify dayahead ─────────────────────────────────────────────
+    if dayahead_fused is not None and len(dayahead_fused) > 0:
+        if adapter_ml_ready and adapter is not None:
+            da_classified = adapter.classify(dayahead_fused)
+        else:
+            da_classified = _classify_predictions(
+                dayahead_fused,
+                price_col="dayahead_price",
+                use_ml=not adapter_ml_ready and use_ml_legacy if not source_repo_path else False,
+                classifier_artifact=classifier_artifact if not source_repo_path else "",
+            )
         result["dayahead"] = {
             "status": "CLASSIFIED",
             "output": da_classified,
             "rows": len(da_classified),
         }
 
-    # Classify realtime
+    # ── Classify realtime ─────────────────────────────────────────────
     if realtime_fused is not None and len(realtime_fused) > 0:
-        rt_classified = _classify_predictions(
-            realtime_fused,
-            price_col="realtime_price",
-            use_ml=use_ml,
-            classifier_artifact=classifier_artifact,
-        )
+        if adapter_ml_ready and adapter is not None:
+            rt_classified = adapter.classify(realtime_fused)
+        else:
+            rt_classified = _classify_predictions(
+                realtime_fused,
+                price_col="realtime_price",
+                use_ml=not adapter_ml_ready and use_ml_legacy if not source_repo_path else False,
+                classifier_artifact=classifier_artifact if not source_repo_path else "",
+            )
         result["realtime"] = {
             "status": "CLASSIFIED",
             "output": rt_classified,

@@ -34,6 +34,7 @@ def run_residual_correction(
     actual_ledger_path: str = "",
     task: str = "dayahead",
     work_dir: str = "",
+    p5m_adapter: Any = None,
 ) -> dict[str, Any]:
     """Apply residual correction to predictions.
 
@@ -47,6 +48,10 @@ def run_residual_correction(
         "dayahead" or "realtime".
     work_dir : str
         Working directory for artifacts.
+    p5m_adapter : ResidualP5MAdapter, optional
+        If provided, delegate correction to this adapter (from
+        ``adapters.residual_p5m_adapter``).  The adapter handles
+        artifact discovery, model loading, and safety guardrails.
 
     Returns
     -------
@@ -64,6 +69,31 @@ def run_residual_correction(
         result["status"] = RESIDUAL_BLOCKED_NO_DATA
         result["reason_codes"].append("NO_PREDICTIONS")
         return result
+
+    # ── Delegate to P5M adapter if provided ──────────────────────────
+    if p5m_adapter is not None:
+        try:
+            adapter_result = p5m_adapter.apply_correction(
+                predictions=predictions, task=task
+            )
+            # Map adapter status to engine status constants
+            adapter_status = adapter_result.get("status", "")
+            if adapter_result.get("correction_applied"):
+                result["status"] = RESIDUAL_CORRECTION_APPLIED
+                result["correction_applied"] = True
+                result["reason_codes"].append("P5M_ADAPTER_USED")
+            else:
+                result["status"] = RESIDUAL_NO_OP_FALLBACK
+            result["reason_codes"].extend(adapter_result.get("reason_codes", []))
+            result["output"] = adapter_result.get("output")
+            result["rows"] = adapter_result.get("rows", len(predictions))
+            result["adapter_status"] = adapter_status
+            result["model_info"] = adapter_result.get("model_info", {})
+            return result
+        except Exception as e:
+            logger.warning("P5M adapter failed: %s. Falling back to built-in.", e)
+            result["reason_codes"].append(f"P5M_ADAPTER_FAILED:{e}")
+            # Fall through to built-in logic below
 
     corrected = predictions.copy()
 

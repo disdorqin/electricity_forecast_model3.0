@@ -57,6 +57,7 @@ def run_full_chain(
     raw_data: str = "",
     dayahead_source_repo: str = "",
     realtime_source_repo: str = "",
+    residual_source_repo: str = "",
     sgdfnet_root: str = "",
     target_start: str = "2026-06-01",
     target_end: str = "2026-06-30",
@@ -69,6 +70,9 @@ def run_full_chain(
     reuse_artifacts: bool = False,
     fast_dev_run: bool = False,
     device: str = "cpu",
+    train_residual_if_missing: bool = False,
+    train_classifier_if_missing: bool = False,
+    realtime_pack: str = "",
 ) -> dict[str, Any]:
     """Run the full prediction chain.
 
@@ -198,6 +202,7 @@ def run_full_chain(
         realtime_predictions=rt_ledger,
         actual_ledger_path="",
         work_dir=work_dir,
+        residual_source_repo=residual_source_repo,
     )
     result["steps"]["residual_correction"] = {
         "status": residual_result["overall_status"],
@@ -251,9 +256,11 @@ def run_full_chain(
         dayahead_fused=da_fused,
         realtime_fused=rt_fused,
         work_dir=work_dir,
+        source_repo_path=realtime_source_repo,
     )
     result["steps"]["classifier"] = {
         "status": classifier_result["classifier_status"],
+        "reason_codes": classifier_result.get("reason_codes", []),
     }
     result["step_order"].append("classifier")
 
@@ -304,6 +311,34 @@ def run_full_chain(
     result["steps"]["postflight"] = {"status": "PASSED"}
     result["step_order"].append("postflight")
 
+    # ── Step 18b: Full Chain Safety Supervisor (P86) ──
+    from safety.full_chain_safety_supervisor import run_full_chain_safety
+    safety_result = run_full_chain_safety(
+        dayahead_predictions=da_ledger,
+        realtime_predictions=rt_ledger,
+        online_pack=None,
+        final_output=output_result.get("output"),
+        fusion_weights=da_weights,
+        target_day=target_end,
+    )
+    result["steps"]["safety_supervisor"] = {
+        "status": safety_result["status"],
+        "errors": safety_result.get("errors", []),
+        "warnings": safety_result.get("warnings", []),
+    }
+    result["step_order"].append("safety_supervisor")
+
+    # Safety supervisor enforcement
+    if safety_result["status"] == "FULL_CHAIN_SAFETY_FAILED":
+        result["errors"].append("safety_supervisor FAILED")
+        if strict:
+            result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+            result["completed_at"] = datetime.now().isoformat()
+            result["elapsed_seconds"] = round(time.time() - t_start, 2)
+            return result
+    elif safety_result["status"] == "FULL_CHAIN_SAFETY_DEGRADED":
+        result["warnings"].append("safety_supervisor DEGRADED")
+
     # ── Step 19: Manifest/Report ──
     manifest = _build_manifest(result, run_id, work_dir)
     manifest_path = os.path.join(work_dir, "run_manifest.json")
@@ -337,11 +372,35 @@ def run_full_chain(
         result["steps"]["claim_guard"] = {"status": "PASSED", "note": "claim guard skipped"}
     result["step_order"].append("claim_guard")
 
-    # ── Step 21: Final status ──
+    # ── Step 21: Final status (P87 real contract) ──
     result["completed_at"] = datetime.now().isoformat()
     result["elapsed_seconds"] = round(time.time() - t_start, 2)
 
-    if delivery_status == "NORMAL" and not result["errors"]:
+    # Track caveats for honest status determination
+    caveats = []
+    rt_step = result["steps"].get("realtime_prediction", {})
+    rt_champion = rt_step.get("champion", {})
+    if rt_champion.get("verdict") == "FAST_DEV_ONLY" or "FALLBACK_USED" in str(rt_step.get("export", {}).get("reason_codes", [])):
+        caveats.append("REALTIME_DA_ANCHOR_FALLBACK")
+
+    res_step = result["steps"].get("residual_correction", {})
+    if "NO_OP" in str(res_step.get("dayahead_status", "")):
+        caveats.append("RESIDUAL_NO_OP_FALLBACK")
+
+    clf_step = result["steps"].get("classifier", {})
+    if clf_step.get("status") == "CLASSIFIER_RULE_FALLBACK":
+        caveats.append("CLASSIFIER_RULE_FALLBACK")
+
+    learner_step = result["steps"].get("unified_weight_learner", {})
+    if learner_step.get("status") in ("UNIFIED_LEARNER_BLOCKED", "UNIFIED_LEARNER_DEGRADED"):
+        caveats.append("ADAPTIVE_LEARNER_DEGRADED")
+
+    result["caveats"] = caveats
+
+    # Final status determination
+    if result["errors"]:
+        result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+    elif delivery_status == "NORMAL" and not caveats:
         result["overall_status"] = FULL_CHAIN_DELIVERY_GO
     elif delivery_status in ("NORMAL", "DEGRADED_DELIVERED"):
         result["overall_status"] = FULL_CHAIN_DELIVERY_GO_WITH_CAVEATS
@@ -504,6 +563,12 @@ def _build_prediction_ledger(
         return None
 
     ledger = predictions.copy()
+
+    # Strip forbidden columns (leakage prevention)
+    for col in ["y_true", "actual", "label", "residual_from_y_true",
+                "future_actual", "eval_residual"]:
+        if col in ledger.columns:
+            ledger = ledger.drop(columns=[col])
 
     # Ensure standard columns
     if "task" not in ledger.columns:
@@ -695,6 +760,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--raw-data", type=str, default="")
     p.add_argument("--dayahead-source-repo", type=str, default="")
     p.add_argument("--realtime-source-repo", type=str, default="")
+    p.add_argument("--residual-source-repo", type=str, default="",
+                   help="Path to 2.0 source repo for P5M residual artifacts")
     p.add_argument("--sgdfnet-root", type=str, default="")
     p.add_argument("--target-start", type=str, default="2026-06-01")
     p.add_argument("--target-end", type=str, default="2026-06-30")
@@ -707,6 +774,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--reuse-artifacts", action="store_true")
     p.add_argument("--fast-dev-run", action="store_true")
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--train-residual-if-missing", action="store_true")
+    p.add_argument("--train-classifier-if-missing", action="store_true")
+    p.add_argument("--realtime-pack", type=str, default="")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)
 
@@ -723,6 +793,7 @@ def main(argv: list[str] | None = None) -> int:
         raw_data=args.raw_data,
         dayahead_source_repo=args.dayahead_source_repo,
         realtime_source_repo=args.realtime_source_repo,
+        residual_source_repo=args.residual_source_repo,
         sgdfnet_root=args.sgdfnet_root,
         target_start=args.target_start,
         target_end=args.target_end,
@@ -735,6 +806,9 @@ def main(argv: list[str] | None = None) -> int:
         reuse_artifacts=args.reuse_artifacts,
         fast_dev_run=args.fast_dev_run,
         device=args.device,
+        train_residual_if_missing=args.train_residual_if_missing,
+        train_classifier_if_missing=args.train_classifier_if_missing,
+        realtime_pack=args.realtime_pack,
     )
 
     if args.json:
