@@ -31,7 +31,7 @@ python main.py \
 |-----------|-------|
 | cfg05 baseline | 9.90% |
 | Trusted BGEW fusion | 9.23% |
-| DA-Safe Realtime | ~15% (estimated) |
+| DA-Safe Realtime | Metric pending / evaluated separately |
 
 ## Current Status
 

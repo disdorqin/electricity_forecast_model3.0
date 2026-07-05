@@ -1,0 +1,62 @@
+{
+  "final_verdict": "FINAL_REAL_INTEGRATED_GO_WITH_CAVEATS",
+  "version": "3.0.0-rc1",
+  "strict_full_production": false,
+  "full_pytest": {
+    "passed": 2123,
+    "failed": 0
+  },
+  "components": {
+    "dayahead": {
+      "status": "READY",
+      "caveat": false
+    },
+    "realtime_da_safe": {
+      "status": "READY",
+      "caveat": false
+    },
+    "sgdfnet_assist": {
+      "status": "CODE_ONLY",
+      "caveat": true
+    },
+    "p5m_residual": {
+      "status": "NO_OP_FALLBACK",
+      "caveat": true
+    },
+    "classifier": {
+      "status": "RULE_FALLBACK",
+      "caveat": true
+    },
+    "learner": {
+      "status": "READY",
+      "caveat": false
+    },
+    "fusion": {
+      "status": "READY",
+      "caveat": false
+    },
+    "safety": {
+      "status": "PASS",
+      "caveat": false
+    },
+    "postflight": {
+      "status": "PASS",
+      "caveat": false
+    },
+    "claim_guard": {
+      "status": "PASS",
+      "caveat": true
+    }
+  },
+  "caveats": [
+    "SGDFNet Assist CODE_ONLY — source exists but runtime not production-ready",
+    "P5M Full Residual NO_OP_FALLBACK — catboost partial only",
+    "ML Classifier RULE_FALLBACK — pickle artifacts depend on external module"
+  ],
+  "blocked_claims": [
+    "FINAL_REAL_INTEGRATED_GO",
+    "SGDFNet production ready",
+    "Full P5M ready",
+    "ML classifier production ready"
+  ]
+}

@@ -6,6 +6,19 @@
 
 version: "3.0-production"
 
+profiles:
+  rc_with_caveats:
+    description: "RC release — optional components may be missing"
+    allow_optional_sgdfnet: true
+    allow_partial_p5m: true
+    allow_rule_classifier: true
+
+  full_real_models:
+    description: "Full production — all components must be real artifacts"
+    allow_optional_sgdfnet: false
+    allow_partial_p5m: false
+    allow_rule_classifier: false
+
 dayahead:
   cfg05:
     required_for_go: true

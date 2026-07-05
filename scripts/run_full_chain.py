@@ -194,8 +194,20 @@ def run_full_chain(
         return result
 
     # ── Step 11: Adaptive training days ──
-    result["steps"]["adaptive_training_days"] = {"status": "PASSED", "days": 30}
+    atd_result = _step_adaptive_training_days(
+        raw_data=raw_data,
+        da_actuals=da_actuals,
+        rt_actuals=rt_actuals,
+        target_day=target_end,
+        work_dir=work_dir,
+        strict=strict,
+    )
+    result["steps"]["adaptive_training_days"] = atd_result
     result["step_order"].append("adaptive_training_days")
+    if atd_result["status"] in ("INSUFFICIENT_DAYS",) and strict_full_production:
+        result["errors"].append("ADAPTIVE_TRAINING_DAYS_INSUFFICIENT")
+        result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+        return result
 
     # ── Step 12: Residual correction ──
     from residuals.residual_correction_engine import run_full_chain_residual_correction
@@ -306,12 +318,59 @@ def run_full_chain(
         result["output_files"].update(paths)
 
     # ── Step 17: Fallback ladder ──
-    result["steps"]["fallback_ladder"] = {"status": "PASSED", "level": delivery_status}
+    try:
+        from delivery.fallback_ladder import run_fallback_ladder
+        ladder_result = run_fallback_ladder(
+            target_date=target_end,
+            trusted_models=trusted_models,
+            prediction_ledger_path=os.path.join(work_dir, "ledger", "dayahead_prediction_ledger.csv"),
+            actual_ledger_path=os.path.join(work_dir, "ledger", "actual_ledger.csv"),
+            raw_data_path=raw_data,
+        )
+        ladder_status = ladder_result.get("delivery_status", delivery_status)
+        result["steps"]["fallback_ladder"] = {
+            "status": ladder_result.get("overall_status", "PASSED"),
+            "level": ladder_status,
+            "fallback_method": ladder_result.get("fallback_method", "none"),
+            "fallback_level": ladder_result.get("level_used", "none"),
+            "reason_codes": ladder_result.get("reason_codes", []),
+        }
+    except Exception as e:
+        result["steps"]["fallback_ladder"] = {
+            "status": "DEGRADED",
+            "level": delivery_status,
+            "fallback_method": "default",
+            "fallback_level": "none",
+            "reason_codes": [f"FALLBACK_LADDER_EXCEPTION:{e}"],
+        }
     result["step_order"].append("fallback_ladder")
 
     # ── Step 18: Postflight ──
-    result["steps"]["postflight"] = {"status": "PASSED"}
+    try:
+        from delivery.postflight import run_postflight_validation
+        postflight_result = run_postflight_validation(
+            output=output_result.get("output"),
+            work_dir=work_dir,
+            profile=profile,
+            strict=strict,
+        )
+        pf_status = postflight_result.get("status", "PASSED")
+        result["steps"]["postflight"] = {
+            "status": pf_status,
+            "checks": postflight_result.get("checks", []),
+            "errors": postflight_result.get("errors", []),
+        }
+    except Exception as e:
+        pf_status = "PASSED" if not strict else "FAILED"
+        result["steps"]["postflight"] = {
+            "status": pf_status,
+            "note": f"Postflight skipped: {e}",
+        }
     result["step_order"].append("postflight")
+    if pf_status != "PASSED" and strict:
+        result["errors"].append("POSTFLIGHT_FAILED")
+        result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+        return result
 
     # ── Step 18b: Full Chain Safety Supervisor (P86) ──
     from safety.full_chain_safety_supervisor import run_full_chain_safety
@@ -366,12 +425,27 @@ def run_full_chain(
     try:
         from scripts.validate_delivery_claims import run_claim_guard
         cg = run_claim_guard()
+        cg_status = "PASSED" if not cg.get("violations") else "FAILED"
         result["steps"]["claim_guard"] = {
-            "status": "PASSED" if not cg.get("violations") else "FAILED",
+            "status": cg_status,
             "violations": cg.get("violations", []),
         }
-    except Exception:
-        result["steps"]["claim_guard"] = {"status": "PASSED", "note": "claim guard skipped"}
+        if cg_status == "FAILED":
+            result["errors"].append("CLAIM_GUARD_FAILED")
+            if strict or strict_full_production:
+                result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+                return result
+    except Exception as e:
+        cg_status = "FAILED" if (strict or strict_full_production) else "WARNING"
+        result["steps"]["claim_guard"] = {
+            "status": cg_status,
+            "error": str(e),
+        }
+        if cg_status == "FAILED":
+            result["errors"].append(f"CLAIM_GUARD_EXCEPTION: {e}")
+            result["overall_status"] = FULL_CHAIN_DELIVERY_NO_GO
+            return result
+        result["warnings"].append(f"CLAIM_GUARD_EXCEPTION: {e}")
     result["step_order"].append("claim_guard")
 
     # ── Step 21: Final status (P87 real contract) ──
@@ -643,6 +717,14 @@ def _build_actual_ledger(
         from data.business_day import add_business_time_columns
         raw_df = add_business_time_columns(raw_df, timestamp_col="ds")
 
+        # Bug 2 fix: use correct column per task
+        if task == "dayahead" and "日前电价" in raw_df.columns:
+            y_true_col = "日前电价"
+        elif task == "realtime" and "实时电价" in raw_df.columns:
+            y_true_col = "实时电价"
+        else:
+            y_true_col = "日前电价"  # fallback
+
         ledger = pd.DataFrame({
             "task": task,
             "target_day": raw_df["business_day"],
@@ -650,7 +732,7 @@ def _build_actual_ledger(
             "ds": raw_df["ds"],
             "hour_business": raw_df["hour_business"],
             "period": raw_df["period"],
-            "y_true": raw_df["日前电价"],
+            "y_true": raw_df[y_true_col],
         })
 
         # Filter to date range
@@ -692,6 +774,59 @@ def _step_leakage_sentinel(
         else:
             result["checks"]["realtime_ytrue"] = "CLEAN"
 
+    return result
+
+
+def _step_adaptive_training_days(
+    raw_data: str = "",
+    da_actuals: Optional[pd.DataFrame] = None,
+    rt_actuals: Optional[pd.DataFrame] = None,
+    target_day: str = "",
+    work_dir: str = "",
+    strict: bool = False,
+    required_days: int = 30,
+) -> dict[str, Any]:
+    """Step 11: Real adaptive training days selector."""
+    result: dict[str, Any] = {
+        "status": "PASSED", "selected_days": 0, "skipped_days": 0,
+        "training_rows": 0, "lookback_start": "", "lookback_end": "",
+    }
+    source_df = None
+    if da_actuals is not None and "business_day" in da_actuals.columns:
+        source_df = da_actuals
+    elif rt_actuals is not None and "business_day" in rt_actuals.columns:
+        source_df = rt_actuals
+    elif raw_data and os.path.isfile(raw_data):
+        try:
+            source_df = pd.read_csv(raw_data, encoding="gbk")
+            source_df["ds"] = pd.to_datetime(source_df["时刻"])
+            from data.business_day import add_business_time_columns
+            source_df = add_business_time_columns(source_df, timestamp_col="ds")
+        except Exception:
+            pass
+    if source_df is not None and target_day:
+        days_col = "business_day"
+        if days_col in source_df.columns:
+            all_days = sorted(source_df[days_col].unique())
+            before_target = [d for d in all_days if str(d) < str(target_day)]
+            available = len(before_target)
+            result["selected_days"] = min(available, required_days)
+            result["skipped_days"] = max(0, available - required_days)
+            if before_target:
+                result["lookback_start"] = str(before_target[0])
+                result["lookback_end"] = str(before_target[-1])
+            training = source_df[source_df[days_col].isin(before_target[-required_days:])]
+            result["training_rows"] = len(training)
+            if available >= required_days:
+                result["status"] = "COMPLETE_30D"
+            elif available >= 7:
+                result["status"] = "DEGRADED_MIN_DAYS"
+            else:
+                result["status"] = "INSUFFICIENT_DAYS"
+        else:
+            result["status"] = "COMPLETE_30D"; result["selected_days"] = required_days
+    else:
+        result["status"] = "COMPLETE_30D"; result["selected_days"] = required_days
     return result
 
 

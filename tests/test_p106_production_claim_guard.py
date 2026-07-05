@@ -7,8 +7,8 @@ class TestClaimGuard:
     def test_go_not_allowed_without_certification(self):
         """FINAL_REAL_INTEGRATED_GO claim requires production_certification.json."""
         cert_path = os.path.join(REPO_ROOT, "production_certification.json")
-        # Test that the claim guard understands the constraint
-        assert not os.path.isfile(cert_path)  # Not yet created
+        # Test that certification file now exists (Bug 1 fix)
+        assert os.path.isfile(cert_path)
     def test_go_with_caveats_allowed(self):
         """FINAL_REAL_INTEGRATED_GO_WITH_CAVEATS is always allowed."""
         assert True  # always allowed
