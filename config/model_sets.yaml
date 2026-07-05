@@ -10,11 +10,21 @@ dayahead:
         sMAPE_floor50: 11.4838
 
 realtime:
+  baselines:
+    - name: rt_da_anchor
+      status: official_default
+      description: DA-Safe Realtime Baseline — rt_pred = da_anchor, always available
+      default_behavior: rt_pred_equals_da_anchor
   candidates:
     - name: da_safe_realtime_assist
       source: MISSING
       status: sidecar_assist
       default_behavior: rt_pred_equals_da_anchor
+    - name: sgdfnet_rt_assist
+      source: disdorqin/electricity_forecast_model2.0_exp
+      path: SGDFNet
+      status: assist_candidate
+      availability: optional
 
 residual:
   plugins:

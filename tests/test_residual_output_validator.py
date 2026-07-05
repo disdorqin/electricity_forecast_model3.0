@@ -153,6 +153,8 @@ class TestCorrectionAppliedBoolean:
         """Non-boolean correction_applied is detected."""
         from scripts.validate_residual_output import validate_residual_dataframe
         df = _valid_corrected_df(24)
+        # Convert bool column to object so we can inject non-boolean values
+        df["correction_applied"] = df["correction_applied"].astype(object)
         df.loc[0, "correction_applied"] = "maybe"
         passed, errors = validate_residual_dataframe(df)
         assert not passed

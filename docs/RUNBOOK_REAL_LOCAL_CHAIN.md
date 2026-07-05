@@ -311,3 +311,72 @@ python -m pytest tests/ -v --tb=short 2>&1 | tail -20
 | Feature shape mismatch | v3 column fill missing | Re-run P31 with `--force` |
 | NaN weights | All models have NaN y_true | Check actual_ledger has valid values |
 | `P36_FUSION_NOT_IMPROVED` | Single model dominates | Review weights, adjust alpha |
+
+---
+
+## P91-P95: DA-Safe Realtime + SGDFNet Assist (2026-07-05)
+
+### P91 — Realtime Design Reclassification
+
+Status naming has been updated. No model training needed.
+
+```bash
+# Run P91 tests
+python -m pytest tests/test_p91_realtime_design_reclassification.py -v --tb=short
+```
+
+### P92 — SGDFNet Assist Adapter
+
+Wraps SGDFNet from 2.0 experiment repo (code-only if repo not available).
+
+```bash
+python -m scripts.run_p92_sgdfnet_assist_adapter \
+    --sgdfnet-root ../../electricity_forecast_model2.0_exp/SGDFNet \
+    --raw-data ../data/shandong_pmos_hourly.csv \
+    --dayahead-predictions .local_artifacts/dayahead/predictions.csv \
+    --target-start 2026-06-01 \
+    --target-end 2026-06-30 \
+    --work-dir .local_artifacts/p92 \
+    --json
+```
+
+### P93 — Realtime Two-Candidate Prediction Ledger
+
+```bash
+python -m scripts.run_p93_realtime_two_candidate_ledger \
+    --da-anchor-predictions .local_artifacts/realtime/online_pack/realtime_online_pack.csv \
+    --sgdfnet-predictions .local_artifacts/p92/sgdfnet_assist_output/sgdfnet_realtime_assist_pack.csv \
+    --output-dir .local_artifacts/p93 \
+    --run-id p93_demo \
+    --json
+```
+
+### P94 — Realtime 30D Pooled Learner
+
+```bash
+python -m scripts.run_p94_realtime_pooled_learner \
+    --realtime-predictions .local_artifacts/p93/realtime_prediction_ledger.csv \
+    --realtime-actuals .local_artifacts/ledger/realtime_actual_ledger.csv \
+    --target-day 2026-07-03 \
+    --output-dir .local_artifacts/p94 \
+    --json
+```
+
+### P95 — Run All P91-P95 Tests
+
+```bash
+python -m pytest tests/test_p91_realtime_design_reclassification.py -v --tb=short
+python -m pytest tests/test_p92_sgdfnet_assist_adapter.py -v --tb=short
+python -m pytest tests/test_p93_realtime_two_candidate_ledger.py -v --tb=short
+python -m pytest tests/test_p94_realtime_pooled_learner.py -v --tb=short
+python -m pytest tests/test_p95_report_status_relabeling.py -v --tb=short
+```
+
+### Realtime Status
+
+```
+Realtime core:     READY (DA-Safe Baseline)
+SGDFNet assist:   CODE_ONLY (available when 2.0 repo is present)
+Learner policy:   pooled_30d_bgew
+Final status:     FINAL_REAL_INTEGRATED_GO_WITH_CAVEATS
+```

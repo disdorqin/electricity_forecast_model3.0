@@ -133,7 +133,7 @@ def build_final_output(
     if "dayahead_confidence" not in output.columns:
         output["dayahead_confidence"] = 0.8
     if "realtime_confidence" not in output.columns:
-        output["realtime_confidence"] = 0.5  # Lower for realtime fallback
+        output["realtime_confidence"] = 0.5
 
     # Add residual info
     residual_applied = False

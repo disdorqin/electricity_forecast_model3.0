@@ -457,6 +457,13 @@ class TestStepOrder:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+import os
+import tempfile
+
+
+SAFE_BASE = os.path.join(tempfile.gettempdir(), "workbuddy_p61_test")
+
+
 class TestMainFunction:
     """Test the main() CLI entry point."""
 
@@ -469,33 +476,41 @@ class TestMainFunction:
     def test_main_with_json_flag(self):
         """main() with --json produces JSON output (capture via str)."""
         from scripts.run_delivery_local_chain import main
-        result = main(["--json", "--force", "--work-dir", "/tmp/_p61_test_main"])
+        wd = os.path.join(SAFE_BASE, "test_main")
+        os.makedirs(wd, exist_ok=True)
+        result = main(["--json", "--force", "--work-dir", wd])
         assert isinstance(result, int)
 
     def test_main_accepts_fusion_engine_flag(self):
         """main() accepts --fusion-engine flag."""
         from scripts.run_delivery_local_chain import main
+        wd = os.path.join(SAFE_BASE, "test_fusion_flag")
+        os.makedirs(wd, exist_ok=True)
         result = main([
             "--json", "--force", "--fusion-engine", "period_bgew",
-            "--work-dir", "/tmp/_p61_test_fusion_flag",
+            "--work-dir", wd,
         ])
         assert isinstance(result, int)
 
     def test_main_accepts_strict_no_leakage(self):
         """main() accepts --strict-no-leakage flag."""
         from scripts.run_delivery_local_chain import main
+        wd = os.path.join(SAFE_BASE, "test_strict")
+        os.makedirs(wd, exist_ok=True)
         result = main([
             "--json", "--force", "--strict-no-leakage",
-            "--work-dir", "/tmp/_p61_test_strict",
+            "--work-dir", wd,
         ])
         assert isinstance(result, int)
 
     def test_main_accepts_allow_degraded(self):
         """main() accepts --allow-degraded."""
         from scripts.run_delivery_local_chain import main
+        wd = os.path.join(SAFE_BASE, "test_degraded")
+        os.makedirs(wd, exist_ok=True)
         result = main([
             "--json", "--force", "--allow-degraded",
-            "--work-dir", "/tmp/_p61_test_degraded",
+            "--work-dir", wd,
         ])
         assert isinstance(result, int)
 

@@ -1,19 +1,35 @@
 """
-fusion/unified_weight_learner.py — P70: Unified Weight Learner.
+fusion/unified_weight_learner.py — P70/P94: Unified Weight Learner.
 
 Learns fusion weights for both day-ahead and realtime tasks.
 
-Dimensions:
-  - task: dayahead / realtime
-  - period: 1_8 / 9_16 / 17_24
-  - regime: normal / low_price / negative_risk / high_spike
-  - model: model_name
+P94 update: learner_policy distinguishes day-ahead vs realtime.
 
-Strict no-lookahead:
-  For target_day D, weights use only days < D.
+    learner_policy = {
+        "dayahead": "period_regime_bgew",    # task x period x regime
+        "realtime": "pooled_30d_bgew",        # task-level pooled 24H
+    }
 
-Fallback ladder:
-  1. If enough history → rolling BGEW
+Day-ahead (unchanged):
+    Dimensions: task x period x regime
+    Uses train_dimensional_weights() for period/regime-specific BGEW.
+
+Realtime (changed):
+    Uses pooled_30d_bgew:
+        For target_day D, use complete days D-30 .. D-1
+        Use all hours 1..24
+        rows ~ 720
+        Compute sMAPE_floor50 for each candidate model
+        BGEW over model dimension only (no period/regime split)
+
+    If only rt_da_anchor available:
+        model_name = rt_da_anchor
+        weight = 1.0
+        learner_method = realtime_single_model_safe_baseline
+        reason_codes = SGDFNET_ASSIST_DISABLED
+
+Fallback ladder (both tasks):
+  1. If enough history → BGEW
   2. If degraded history → period BGEW
   3. If one model → single model weight=1.0
   4. Else → task fallback (equal weight)
@@ -26,6 +42,16 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+
+from models.realtime_state import (
+    SGDFNET_ASSIST_DISABLED,
+    LEARNER_POLICY_DAYAHEAD,
+    LEARNER_POLICY_REALTIME,
+    LEARNER_POLICY_REALTIME_SINGLE,
+    REALTIME_LEARNER_POOLED_TRAINED,
+    REALTIME_LEARNER_SINGLE_MODEL,
+    REALTIME_LEARNER_BLOCKED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +74,16 @@ REGIMES = ["normal", "low_price", "negative_risk", "high_spike"]
 LEARNER_FULL_DIMENSIONAL = "LEARNER_FULL_DIMENSIONAL"
 LEARNER_PERIOD_ONLY = "LEARNER_PERIOD_ONLY"
 LEARNER_TASK_ONLY = "LEARNER_TASK_ONLY"
+
+# ── Learner policy (P94) ──────────────────────────────────────────────
+LEARNER_POLICY: dict[str, str] = {
+    "dayahead": LEARNER_POLICY_DAYAHEAD,    # period_regime_bgew
+    "realtime": LEARNER_POLICY_REALTIME,     # pooled_30d_bgew
+}
+
+# ── Pooled learner constants ──────────────────────────────────────────
+POOLED_LOOKBACK_DAYS = 30
+POOLED_MIN_TRAINING_DAYS = 7
 
 
 def compute_bgew_weights(
@@ -386,19 +422,25 @@ def train_unified_weights(
     realtime_actuals: Optional[pd.DataFrame] = None,
     target_day: str = "",
     alpha: float = DEFAULT_ALPHA,
+    learner_policy: Optional[dict[str, str]] = None,
+    hard_reject_bad_assist: bool = False,
 ) -> dict[str, Any]:
-    """Train unified weights for both tasks using 2.5-style dimensional learning.
+    """Train unified weights using the task-specific learner policy.
 
-    Calls ``train_dimensional_weights`` for each task (dayahead, realtime),
-    producing weights across period x regime dimensions.  If only one model
-    is available per task, weight=1 is assigned with SINGLE_MODEL_FALLBACK.
+    P94: learner_policy determines the method per task.
+
+    Day-ahead (LEARNER_POLICY_DAYAHEAD = period_regime_bgew):
+        Dimensional learning across period x regime (unchanged).
+
+    Realtime (LEARNER_POLICY_REALTIME = pooled_30d_bgew):
+        Pooled 30-day learning without period/regime split.
 
     Parameters
     ----------
     dayahead_predictions : DataFrame
         Day-ahead prediction ledger (multi-model).
     realtime_predictions : DataFrame
-        Realtime prediction ledger (multi-model).
+        Realtime prediction ledger (can have 1 or 2 models).
     dayahead_actuals : DataFrame
         Day-ahead actual values.
     realtime_actuals : DataFrame
@@ -407,11 +449,16 @@ def train_unified_weights(
         Target day for which weights are computed.
     alpha : float
         BGEW alpha parameter.
+    learner_policy : dict, optional
+        Override policy. Defaults to LEARNER_POLICY.
+    hard_reject_bad_assist : bool
+        If True, completely exclude bad assist models.
 
     Returns
     -------
     dict with weights DataFrames and status.
     """
+    policy = learner_policy or LEARNER_POLICY
     result: dict[str, Any] = {
         "status": UNIFIED_LEARNER_BLOCKED,
         "dayahead_weights": None,
@@ -425,7 +472,7 @@ def train_unified_weights(
 
     trained_levels: list[str] = []
 
-    # ── Day-ahead dimensional weights ──
+    # ── Day-ahead: period_regime_bgew (dimensional) ──
     if dayahead_predictions is not None and dayahead_actuals is not None:
         da_result = train_dimensional_weights(
             predictions=dayahead_predictions,
@@ -443,7 +490,7 @@ def train_unified_weights(
             if da_result.get("dimensional_level"):
                 trained_levels.append(da_result["dimensional_level"])
         else:
-            # Check for single-model fallback
+            # Single model fallback
             merged = _merge_pred_actuals(dayahead_predictions, dayahead_actuals, target_day)
             if merged is not None and "model_name" in merged.columns:
                 models = merged["model_name"].unique().tolist()
@@ -454,34 +501,67 @@ def train_unified_weights(
                     result["reason_codes"].append("SINGLE_MODEL_FALLBACK_dayahead")
                     trained_levels.append("SINGLE_MODEL_FALLBACK")
 
-    # ── Realtime dimensional weights ──
+    # ── Realtime: pooled_30d_bgew ──
     if realtime_predictions is not None and realtime_actuals is not None:
-        rt_result = train_dimensional_weights(
-            predictions=realtime_predictions,
-            actuals=realtime_actuals,
-            target_day=target_day,
-            task="realtime",
-            alpha=alpha,
-        )
-        if rt_result["weights_df"] is not None and len(rt_result["weights_df"]) > 0:
-            result["realtime_weights"] = rt_result["weights_df"]
-            result["training_days"] = max(result["training_days"], rt_result["training_days"])
-            result["reason_codes"].extend(rt_result["reason_codes"])
-            if not result["lookback_start"]:
-                result["lookback_start"] = rt_result.get("lookback_start", "")
-                result["lookback_end"] = rt_result.get("lookback_end", "")
-            if rt_result.get("dimensional_level"):
-                trained_levels.append(rt_result["dimensional_level"])
+        rt_policy = policy.get("realtime", LEARNER_POLICY_REALTIME)
+
+        if rt_policy == LEARNER_POLICY_REALTIME:
+            # Use pooled 30-day BGEW
+            rt_result = train_pooled_30d_bgew(
+                predictions=realtime_predictions,
+                actuals=realtime_actuals,
+                target_day=target_day,
+                task="realtime",
+                alpha=alpha,
+                hard_reject_bad_assist=hard_reject_bad_assist,
+            )
+            if rt_result["weights_df"] is not None and len(rt_result["weights_df"]) > 0:
+                result["realtime_weights"] = rt_result["weights_df"]
+                result["training_days"] = max(result["training_days"], rt_result["training_days"])
+                result["reason_codes"].extend(rt_result.get("reason_codes", []))
+                if not result["lookback_start"]:
+                    result["lookback_start"] = rt_result.get("lookback_start", "")
+                    result["lookback_end"] = rt_result.get("lookback_end", "")
+                trained_levels.append(f"REALTIME_POOLED:{rt_result['status']}")
+            else:
+                # Single model fallback
+                merged = _merge_pred_actuals(realtime_predictions, realtime_actuals, target_day)
+                if merged is not None and "model_name" in merged.columns:
+                    models = merged["model_name"].unique().tolist()
+                    if len(models) == 1:
+                        result["realtime_weights"] = _single_model_fallback_df(
+                            "realtime", target_day, models[0], merged,
+                        )
+                        result["reason_codes"].append("SINGLE_MODEL_FALLBACK_realtime")
+                        trained_levels.append("SINGLE_MODEL_FALLBACK")
         else:
-            merged = _merge_pred_actuals(realtime_predictions, realtime_actuals, target_day)
-            if merged is not None and "model_name" in merged.columns:
-                models = merged["model_name"].unique().tolist()
-                if len(models) == 1:
-                    result["realtime_weights"] = _single_model_fallback_df(
-                        "realtime", target_day, models[0], merged,
-                    )
-                    result["reason_codes"].append("SINGLE_MODEL_FALLBACK_realtime")
-                    trained_levels.append("SINGLE_MODEL_FALLBACK")
+            # Fallback to dimensional (legacy)
+            rt_result = train_dimensional_weights(
+                predictions=realtime_predictions,
+                actuals=realtime_actuals,
+                target_day=target_day,
+                task="realtime",
+                alpha=alpha,
+            )
+            if rt_result["weights_df"] is not None and len(rt_result["weights_df"]) > 0:
+                result["realtime_weights"] = rt_result["weights_df"]
+                result["training_days"] = max(result["training_days"], rt_result["training_days"])
+                result["reason_codes"].extend(rt_result.get("reason_codes", []))
+                if not result["lookback_start"]:
+                    result["lookback_start"] = rt_result.get("lookback_start", "")
+                    result["lookback_end"] = rt_result.get("lookback_end", "")
+                if rt_result.get("dimensional_level"):
+                    trained_levels.append(rt_result["dimensional_level"])
+            else:
+                merged = _merge_pred_actuals(realtime_predictions, realtime_actuals, target_day)
+                if merged is not None and "model_name" in merged.columns:
+                    models = merged["model_name"].unique().tolist()
+                    if len(models) == 1:
+                        result["realtime_weights"] = _single_model_fallback_df(
+                            "realtime", target_day, models[0], merged,
+                        )
+                        result["reason_codes"].append("SINGLE_MODEL_FALLBACK_realtime")
+                        trained_levels.append("SINGLE_MODEL_FALLBACK")
 
     # ── Determine overall status ──
     has_da = result["dayahead_weights"] is not None and len(result["dayahead_weights"]) > 0
@@ -540,6 +620,189 @@ def _single_model_fallback_df(
                 "reason_codes": "SINGLE_MODEL_FALLBACK",
             })
     return pd.DataFrame(rows)
+
+
+def train_pooled_30d_bgew(
+    predictions: pd.DataFrame,
+    actuals: pd.DataFrame,
+    target_day: str,
+    task: str,
+    alpha: float = DEFAULT_ALPHA,
+    min_weight: float = MIN_WEIGHT,
+    max_weight: float = MAX_WEIGHT,
+    hard_reject_bad_assist: bool = False,
+) -> dict[str, Any]:
+    """Train pooled 30-day BGEW weights for realtime task.
+
+    P94: Realtime uses pooled_30d_bgew instead of period_regime_bgew.
+
+    For target_day D:
+      - Use complete days D-30 .. D-1 (no-lookahead)
+      - Use all hours 1..24 (pooled, no period/regime split)
+      - rows ~ 720 (30 days x 24 hours)
+      - Compute sMAPE_floor50 for each model
+      - BGEW over model dimension only
+
+    Parameters
+    ----------
+    predictions : DataFrame
+        Prediction ledger with model_name, business_day, y_pred, etc.
+    actuals : DataFrame
+        Actual values ledger.
+    target_day : str
+        Target day (no-lookahead: only days < target_day used).
+    task : str
+        Task name (should be 'realtime').
+    alpha : float
+        BGEW exponential decay parameter.
+    min_weight : float
+        Minimum weight floor.
+    max_weight : float
+        Maximum weight cap.
+    hard_reject_bad_assist : bool
+        If True, completely exclude an assist model whose sMAPE is
+        significantly worse than the baseline (instead of just low weight).
+
+    Returns
+    -------
+    dict with keys:
+        weights_df : DataFrame or None
+        training_days : int
+        training_rows : int
+        reason_codes : list of str
+        lookback_start : str
+        lookback_end : str
+        status : str
+    """
+    result: dict[str, Any] = {
+        "weights_df": None,
+        "training_days": 0,
+        "training_rows": 0,
+        "reason_codes": [],
+        "lookback_start": "",
+        "lookback_end": "",
+        "status": REALTIME_LEARNER_BLOCKED,
+    }
+
+    # Merge predictions with actuals
+    merged = _merge_pred_actuals(predictions, actuals, target_day)
+    if merged is None or len(merged) == 0:
+        result["reason_codes"].append(f"NO_MERGED_DATA_{task}")
+        return result
+
+    # No-lookahead: ensure only days < target_day
+    if target_day and "business_day" in merged.columns:
+        merged = merged[merged["business_day"] < target_day]
+
+    if len(merged) == 0:
+        result["reason_codes"].append(f"NO_DATA_BEFORE_TARGET_{task}")
+        return result
+
+    # Identify models
+    models = merged["model_name"].unique().tolist() if "model_name" in merged.columns else []
+    if not models:
+        result["reason_codes"].append(f"NO_MODELS_{task}")
+        return result
+
+    # Track lookback window
+    if "business_day" in merged.columns:
+        sorted_days = sorted(merged["business_day"].unique())
+        result["lookback_start"] = str(sorted_days[0]) if len(sorted_days) > 0 else ""
+        result["lookback_end"] = str(sorted_days[-1]) if len(sorted_days) > 0 else ""
+
+    # Count training days
+    training_days = merged["business_day"].nunique() if "business_day" in merged.columns else 0
+    result["training_days"] = training_days
+    result["training_rows"] = len(merged)
+
+    if training_days < POOLED_MIN_TRAINING_DAYS:
+        result["reason_codes"].append(f"INSUFFICIENT_TRAINING_DAYS:{training_days}_lt_{POOLED_MIN_TRAINING_DAYS}")
+        return result
+
+    # Single model case
+    if len(models) < 2:
+        model_name = models[0] if models else "rt_da_anchor"
+        result["status"] = REALTIME_LEARNER_SINGLE_MODEL
+        result["reason_codes"].append("SGDFNET_ASSIST_DISABLED" if "sgdfnet" not in model_name else "SINGLE_MODEL")
+        weights_df = pd.DataFrame({
+            "task": task,
+            "target_day": target_day,
+            "period": "all",
+            "regime": "all",
+            "model_name": [model_name],
+            "weight": [1.0],
+            "learner_method": LEARNER_POLICY_REALTIME_SINGLE,
+            "training_days": training_days,
+            "training_rows": len(merged),
+            "lookback_start": result["lookback_start"],
+            "lookback_end": result["lookback_end"],
+            "reason_codes": ";".join(result["reason_codes"]) if result["reason_codes"] else "",
+        })
+        result["weights_df"] = weights_df
+        return result
+
+    # Compute pooled sMAPE for each model
+    smape_by_model: dict[str, float] = {}
+    for model in models:
+        model_data = merged[merged["model_name"] == model]
+        if "y_true" not in model_data.columns or "y_pred" not in model_data.columns:
+            continue
+        y_true = model_data["y_true"].dropna().values
+        y_pred = model_data["y_pred"].dropna().values
+        min_len = min(len(y_true), len(y_pred))
+        if min_len > 0:
+            smape_by_model[model] = _compute_smape(y_true[:min_len], y_pred[:min_len])
+
+    if not smape_by_model:
+        result["reason_codes"].append("NO_SMAPE_COMPUTED_POOLED")
+        return result
+
+    # Compute BGEW weights
+    weights = compute_bgew_weights(smape_by_model, alpha=alpha, min_weight=min_weight, max_weight=max_weight)
+
+    # Hard reject bad assist
+    if hard_reject_bad_assist and len(weights) > 1:
+        baseline_model = "rt_da_anchor"
+        for model_name, w in list(weights.items()):
+            if model_name != baseline_model and w < min_weight:
+                # This assist model is too poor — reject entirely
+                weights[model_name] = 0.0
+                result["reason_codes"].append(f"HARD_REJECT_BAD_ASSIST:{model_name}")
+
+        # Renormalize
+        total = sum(weights.values())
+        if total > 0:
+            weights = {m: w / total for m, w in weights.items()}
+
+    # Build weights DataFrame
+    all_rows = []
+    for model_name, w in weights.items():
+        if w <= 0:
+            continue
+        all_rows.append({
+            "task": task,
+            "target_day": target_day,
+            "period": "all",
+            "regime": "all",
+            "model_name": model_name,
+            "weight": w,
+            "learner_method": LEARNER_POLICY_REALTIME,
+            "training_days": training_days,
+            "training_rows": len(merged),
+            "lookback_start": result["lookback_start"],
+            "lookback_end": result["lookback_end"],
+            "reason_codes": "",
+        })
+
+    if not all_rows:
+        result["reason_codes"].append("NO_WEIGHTS_AFTER_FILTER")
+        return result
+
+    weights_df = pd.DataFrame(all_rows)
+    result["weights_df"] = weights_df
+    result["status"] = REALTIME_LEARNER_POOLED_TRAINED
+    result["reason_codes"].append("POOLED_30D_BGEW_TRAINED")
+    return result
 
 
 def _compute_task_weights(

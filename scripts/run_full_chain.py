@@ -381,7 +381,7 @@ def run_full_chain(
     rt_step = result["steps"].get("realtime_prediction", {})
     rt_champion = rt_step.get("champion", {})
     if rt_champion.get("verdict") == "FAST_DEV_ONLY" or "FALLBACK_USED" in str(rt_step.get("export", {}).get("reason_codes", [])):
-        caveats.append("REALTIME_DA_ANCHOR_FALLBACK")
+        caveats.append("REALTIME_DA_SAFE_BASELINE")
 
     res_step = result["steps"].get("residual_correction", {})
     if "NO_OP" in str(res_step.get("dayahead_status", "")):

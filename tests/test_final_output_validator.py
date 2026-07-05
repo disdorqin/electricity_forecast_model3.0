@@ -66,6 +66,14 @@ def _valid_final_df(n_hours: int = 24) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _convert_cols_to_object(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert boolean columns to object so tests can inject non-boolean values."""
+    for col in ["negative_flag", "classifier_applied"]:
+        if col in df.columns and df[col].dtype == bool:
+            df[col] = df[col].astype(object)
+    return df
+
+
 class TestFinalOutputValidator:
     """Contract: validate_final_dataframe."""
 
@@ -185,14 +193,14 @@ class TestFinalOutputValidator:
 
     def test_non_boolean_negative_flag_detected(self):
         """non-boolean negative_flag is detected."""
-        df = _valid_final_df(24)
+        df = _convert_cols_to_object(_valid_final_df(24))
         df.loc[0, "negative_flag"] = "maybe"
         valid, errors = validate_final_dataframe(df, production=True)
         assert not valid
 
     def test_non_boolean_classifier_applied_detected(self):
         """non-boolean classifier_applied is detected."""
-        df = _valid_final_df(24)
+        df = _convert_cols_to_object(_valid_final_df(24))
         df.loc[0, "classifier_applied"] = "yes"
         valid, errors = validate_final_dataframe(df, production=True)
         assert not valid

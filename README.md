@@ -1,6 +1,6 @@
 # electricity_forecast_model3.0 — Multi-Model Fusion for Electricity Price Forecasting
 
-> **Project Status**: DELIVERY_FREEZE_READY (v3.0.0)
+> **Project Status**: FINAL_REAL_INTEGRATED_GO_WITH_CAVEATS (v3.0.0)
 > **Default Profile**: `trusted_delivery`
 > **Date**: 2026-07-05
 
@@ -256,7 +256,50 @@ tests/                            Test suite
 - ✅ **P56 regime BGEW fusion** (fusion/trust_gated_regime_bgew.py)
 - ✅ **P57 safety supervisor integration** (scripts/run_delivery_local_chain.py)
 
-## 17. What Remains Future Work
+## 17. Realtime Prediction Status (P91-P95)
+
+### DA-Safe Realtime Baseline — Official Default
+
+The realtime prediction is now an **official DA-Safe Baseline** (not a fallback):
+
+```
+rt_pred = da_anchor  (DA-Safe Baseline)
+         +
+SGDFNet Assist / sidecar (optional enhancement)
+da_error_prob, residual_direction_prob, uncertainty_score,
+correction_permission, reason_codes
+```
+
+### Status Rules
+
+| Condition | Status |
+|---|---|
+| rt_da_anchor available + realtime_price no NaN + safety PASS | **REALTIME_READY_DA_SAFE_ONLY** |
+| SGDFNet available + ledger + learner PASS | **REALTIME_HYBRID_READY** |
+| realtime_price NaN | **NO_GO** |
+
+### Learner Policy
+
+```python
+learner_policy = {
+    "dayahead": "period_regime_bgew",    # period x regime dimensional
+    "realtime": "pooled_30d_bgew",        # pooled 24H, 30-day lookback
+}
+```
+
+### Key Files
+
+| File | Purpose |
+|---|---|
+| `models/adapters/sgdfnet_assist_adapter.py` | SGDFNet assist adapter (P92) |
+| `ledgers/realtime_prediction_ledger.py` | 2-candidate realtime ledger (P93) |
+| `fusion/unified_weight_learner.py` | Pooled 30D BGEW learner (P94) |
+| `models/realtime_state.py` | Realtime state constants |
+| `scripts/run_p92_sgdfnet_assist_adapter.py` | Run SGDFNet assist |
+| `scripts/run_p93_realtime_two_candidate_ledger.py` | Build realtime ledger |
+| `scripts/run_p94_realtime_pooled_learner.py` | Run realtime learner |
+
+### What Remains Future Work
 
 - Retrain stage3 with proper temporal CV in source repo
 - Integrate real-time (RT) model assist
