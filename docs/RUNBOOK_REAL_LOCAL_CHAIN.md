@@ -15,11 +15,65 @@ python -m scripts.run_delivery_local_chain \
     --raw-data ../data/shandong_pmos_hourly.csv \
     --source-repo .local_artifacts/source_repos/epf-sota-experiment \
     --profile trusted_delivery \
+    --fusion-engine regime_bgew \
+    --required-training-days 30 \
+    --allow-degraded \
+    --strict-no-leakage \
     --start-day 2026-06-01 \
     --end-day 2026-06-30 \
     --work-dir .local_artifacts/delivery_run \
     --json --strict
 ```
+
+## P57 CLI Flags (Safety Supervisor)
+
+The runner supports additional safety supervisor flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--fusion-engine NAME` | `period_bgew` | Fusion engine to use: `regime_bgew`, `period_bgew`, `equal_weight`, `cfg05` |
+| `--required-training-days N` | 30 | Required complete training days for P52 adaptive selector |
+| `--max-lookback-days N` | 180 | Maximum calendar days to scan backwards for training days |
+| `--min-days-for-degraded N` | 7 | Minimum days to qualify as DEGRADED (below this = INSUFFICIENT) |
+| `--allow-degraded` | off | Allow delivery with DEGRADED_MIN_DAYS training day status |
+| `--strict-no-leakage` | off | Fail immediately if ANY leakage check triggers (P53 strict mode) |
+
+Example with full P57 safety config:
+
+```bash
+python -m scripts.run_delivery_local_chain \
+    --raw-data ../data/shandong_pmos_hourly.csv \
+    --source-repo .local_artifacts/source_repos/epf-sota-experiment \
+    --profile trusted_delivery \
+    --fusion-engine regime_bgew \
+    --required-training-days 30 \
+    --max-lookback-days 180 \
+    --min-days-for-degraded 7 \
+    --allow-degraded \
+    --strict-no-leakage \
+    --start-day 2026-06-01 \
+    --end-day 2026-06-30 \
+    --work-dir .local_artifacts/delivery_run \
+    --json --strict
+```
+
+## P57 Safety Supervisor Pipeline
+
+The runner executes these steps in order (P57 additions in **bold**):
+
+1. Raw data check (existing)
+2. Source repo check (existing)
+3. **Safety preflight** (P53 leakage sentinel)
+4. **Adaptive training days** (P52)
+5. Trust gate (P41)
+6. Actual ledger (P34)
+7. Trusted fusion (P42) — if 2+ trusted models
+8. Rolling validation (P43) — if 2+ trusted models
+9. **Fallback ladder** (P54)
+10. **Postflight validation** (P55)
+11. Delivery summary (P44)
+12. Forbidden file check
+13. Claim guard (P46)
 
 ## Prerequisites
 
@@ -180,6 +234,42 @@ python -m scripts.run_p49_final_delivery_audit --json --strict
 - **best_two_average** and **catboost_sota** excluded (corr > 0.995) — conservative safety gate
 - Trusted pool is only 2 models, so fusion improvement is modest (~6.79%)
 - **Research results (69.96%, 2.97%) are NOT delivery claims**
+
+## Output Files
+
+The runner produces the following output files under `<work-dir>/`:
+
+| File | Description |
+|------|-------------|
+| `delivery_summary.json` | Full delivery summary with metrics and status (P44) |
+| `final_output.csv` | Fused predictions (24-hour day-ahead prices) |
+| `metrics.json` | Extracted performance metrics (sMAPE, improvement) |
+| `run_manifest.json` | **New (P55):** Delivery run manifest with run ID, timestamps, profile, training days, fusion method, fallback info, postflight results, warnings, and errors |
+| `delivery_report.md` | **New (P55):** Human-readable markdown delivery report with per-check pass/fail table and metrics |
+| `delivery_report.json` | **New (P55):** Machine-readable JSON delivery report for programmatic consumption |
+
+### run_manifest.json Schema
+
+```json
+{
+    "run_id": "delivery-20260705-001",
+    "target_day": "2026-07-05",
+    "profile": "trusted_delivery",
+    "started_at": "2026-07-05T08:00:00",
+    "completed_at": "2026-07-05T08:30:00",
+    "status": "PASS",
+    "delivery_status": "NORMAL",
+    "selected_training_days": 30,
+    "trusted_models": ["lightgbm_cfg05_dayahead", "catboost_spike_residual"],
+    "quarantined_models": ["stage3_business_fixed"],
+    "fusion_method": "regime_bgew",
+    "fallback": {"fallback_used": false, "fallback_method": ""},
+    "postflight": { ... },
+    "metrics": {"sMAPE": 9.23, "MAE": 15.4},
+    "warnings": [],
+    "errors": []
+}
+```
 
 ## Artifact Layout
 

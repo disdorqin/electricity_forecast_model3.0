@@ -192,7 +192,31 @@ actual ledger ← data source ←───────────────�
 python -m pytest tests/ -v --tb=short
 ```
 
-## 13. Safety & No-Leakage Policy
+## 13. Safety Supervisor (P52-P57)
+
+The safety supervisor is a multi-layered runtime guard that ensures delivery output integrity through progressive fallback, runtime leakage detection, and postflight validation. It integrates into the P47 delivery runner as P57.
+
+### Components
+
+- **P53 — Leakage Sentinel**: Runtime guard that detects y_true leakage via correlation, sMAPE, and MAE checks against actuals. Classifies models as TRUSTED, CONSERVATIVE_QUARANTINE, or SUSPECT_LEAKAGE. Thresholds: CORR_THRESHOLD=0.995, WITHIN_1PCT_THRESHOLD=0.80, sMAPE_floor50<2.0, MAE<10.0 CNY.
+
+- **P52 — Adaptive Training Days**: Scans backwards from D-1 to find complete training days. Four status levels: COMPLETE_30D (>=30 days), DEGRADED (>=7 days), INSUFFICIENT (<7 days), NO_VALID_DAYS (0 days). Configurable via `--required-training-days`, `--max-lookback-days`, `--min-days-for-degraded`.
+
+- **P54 — Fallback Ladder**: 6-level progressive fallback: trusted_bgew_fusion (NORMAL) → trusted_equal_weight (DEGRADED) → best_trusted_single_model (DEGRADED) → cfg05_baseline (DEGRADED) → historical_same_hour_median (DEGRADED) → FAILED_NO_DELIVERY.
+
+- **P55 — Postflight Validation**: 12 checks on delivery output: file exists, 24 rows, hour_business range 1..24, no duplicate hours, no NaN, business_day consistency, profile delivery allowed, no quarantined models, claim guard pass, no git-tracked artifacts, hour-24 convention, no merge suffixes.
+
+- **P56 — Regime BGEW Fusion**: 4-regime adaptive weighting (normal/low_price/negative_risk/high_spike) with trust gating, cfg05 floor (30%), min/max weight bounds (5%/75%), and internal 3-level fallback chain (regime_bgew → period_bgew → equal_weight).
+
+### Three-Tier Delivery Status
+
+| Status | Exit Code | Condition |
+|--------|-----------|-----------|
+| NORMAL | 0 | Level 1 fallback succeeds AND postflight PASS; safe to deliver |
+| DEGRADED_DELIVERED | 2 | Levels 2-5 produce valid 24H output; delivery allowed with warnings |
+| FAILED_NO_DELIVERY | 1 | All 6 fallback levels failed; no delivery possible |
+
+## 14. Safety & No-Leakage Policy (Cont.)
 
 1. **No y_true in prediction ledger**: Prediction and actual ledgers are kept separate
 2. **No forward-looking features**: All feature builder operations use `shift(1+)` and backward-looking windows
@@ -202,7 +226,7 @@ python -m pytest tests/ -v --tb=short
 6. **No data, model, or ledger files committed**: Git-tracked files contain only code, config, and documentation
 7. **Cannot commit delivery artifacts**: Runner explicitly avoids committing `delivery_summary.json`, `final_output.csv`, `metrics.json`
 
-## 14. File Layout
+## 15. File Layout
 
 ```
 config/fusion_profiles.yaml      Profile definitions
@@ -215,7 +239,7 @@ tests/                            Test suite
 .local_artifacts/                 Artifacts (gitignored)
 ```
 
-## 15. Deliverables
+## 16. Deliverables
 
 - ✅ P41 model trust gate (scripts/run_p41_model_trust_gate.py)
 - ✅ P42 trusted fusion backtest (scripts/run_p42_trusted_fusion_backtest.py)
@@ -225,8 +249,14 @@ tests/                            Test suite
 - ✅ P47 one-command runner (scripts/run_delivery_local_chain.py)
 - ✅ P49 final audit (scripts/run_p49_final_delivery_audit.py)
 - ✅ P50 delivery freeze report (docs/reports/p50_final_delivery_freeze_report.md)
+- ✅ **P52 adaptive training days** (fusion/adaptive_training_days.py)
+- ✅ **P53 leakage sentinel** (safety/leakage_sentinel.py)
+- ✅ **P54 fallback ladder** (delivery/fallback_ladder.py)
+- ✅ **P55 postflight + manifest + report** (delivery/postflight.py, delivery/manifest.py, delivery/report.py)
+- ✅ **P56 regime BGEW fusion** (fusion/trust_gated_regime_bgew.py)
+- ✅ **P57 safety supervisor integration** (scripts/run_delivery_local_chain.py)
 
-## 16. What Remains Future Work
+## 17. What Remains Future Work
 
 - Retrain stage3 with proper temporal CV in source repo
 - Integrate real-time (RT) model assist

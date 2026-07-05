@@ -5,6 +5,45 @@
 
 ---
 
+## Three-Tier Delivery Status (P57)
+
+The delivery pipeline produces one of three terminal statuses:
+
+| Status | Exit Code | Description | Condition |
+|--------|-----------|-------------|-----------|
+| **NORMAL** | 0 | All checks passed, safe to deliver | Level 1 (trusted_bgew_fusion) succeeds AND postflight validation PASS |
+| **DEGRADED_DELIVERED** | 2 | Some non-critical checks failed, delivery still allowed | Levels 2-5 produce valid 24H output with no NaN and valid schema |
+| **FAILED_NO_DELIVERY** | 1 | Critical checks failed, no delivery possible | All 6 fallback levels failed |
+
+### Exit Code Convention
+
+- **Exit 0 (NORMAL)**: The output is fully trusted. BGEW fusion via trusted models succeeded, and all 12 postflight checks passed. This is the ideal delivery state.
+- **Exit 2 (DEGRADED_DELIVERED)**: The output is usable but degraded. The pipeline fell back to equal-weight, best-single-model, cfg05-baseline, or historical-median. Delivery is still allowed, but consumers should be aware that the fusion engine did not produce the primary output.
+- **Exit 1 (FAILED_NO_DELIVERY)**: No output could be produced. All 6 fallback levels were exhausted. The pipeline cannot deliver predictions for the target day.
+
+### Mapping to Fallback Levels
+
+| Fallback Level | Method | Status |
+|----------------|--------|--------|
+| 1 | trusted_bgew_fusion | NORMAL |
+| 2 | trusted_equal_weight | DEGRADED_DELIVERED |
+| 3 | best_trusted_single_model | DEGRADED_DELIVERED |
+| 4 | cfg05_baseline | DEGRADED_DELIVERED |
+| 5 | historical_same_hour_median | DEGRADED_DELIVERED |
+| 6 | FAILED_NO_DELIVERY | FAILED_NO_DELIVERY |
+
+### Postflight Status Mapping
+
+Postflight validation (P55, 12 checks) also contributes to the status:
+
+| Postflight Status | Interpreted As | Action |
+|-------------------|----------------|--------|
+| PASS (0 failures) | NORMAL | Full confidence delivery |
+| WARN (1-2 failures) | DEGRADED_DELIVERED | Check warnings, still deliverable |
+| FAIL (3+ failures) | FAILED_NO_DELIVERY | Block delivery; inspect errors |
+
+---
+
 ## Current State
 
 | Component | Status | Notes |
