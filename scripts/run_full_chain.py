@@ -325,7 +325,7 @@ def run_full_chain(
             target_date=target_end,
             trusted_models=trusted_models,
             prediction_ledger_path=os.path.join(work_dir, "ledger", "dayahead_prediction_ledger.csv"),
-            actual_ledger_path=os.path.join(work_dir, "ledger", "actual_ledger.csv"),
+            actual_ledger_path=os.path.join(work_dir, "ledger", "dayahead_actual_ledger.csv"),
             raw_data_path=raw_data,
         )
         ladder_status = ladder_result.get("delivery_status", delivery_status)

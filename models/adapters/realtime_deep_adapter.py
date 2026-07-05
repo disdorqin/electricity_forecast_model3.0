@@ -568,7 +568,9 @@ class RealtimeDeepAdapter:
             "reason_codes": [],
         }
 
-        out_dir = output_dir or os.path.join(self.work_dir, "eval_pack")
+        # Bug A fix: robust output_dir handling with eval_only subdirectory
+        base_dir = output_dir or (self.work_dir if hasattr(self, 'work_dir') and self.work_dir else ".local_artifacts/realtime")
+        out_dir = os.path.join(base_dir, "eval_only")
         os.makedirs(out_dir, exist_ok=True)
 
         if da_predictions is None or len(da_predictions) == 0:

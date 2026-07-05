@@ -1,0 +1,48 @@
+{
+  "verdict": "2025_FULL_BGEW_BENCHMARK_BLOCKED_CFG05_ONLY",
+  "version": "3.0.0-rc1",
+  "evaluation_period": "2025-01-01 to 2025-12-31",
+  "benchmark_status": {
+    "cfg05_only": "COMPLETE",
+    "catboost_spike_residual": "BLOCKED_FEATURE_PIPELINE",
+    "catboost_sota": "BLOCKED_QUARANTINED",
+    "best_two_average": "BLOCKED_QUARANTINED",
+    "stage3_business_fixed": "BLOCKED_QUARANTINED",
+    "trusted_bgew_fusion": "BLOCKED_INSUFFICIENT_MODELS",
+    "residual_corrected_bgew": "BLOCKED_DEPENDS_ON_BGEW"
+  },
+  "dayahead": {
+    "cfg05_only_sMAPE_floor50": 20.22,
+    "local_jun2026_cfg05": 9.90,
+    "local_jun2026_trusted_bgew": 9.23,
+    "model_count": 1,
+    "models": ["lightgbm_cfg05_dayahead"],
+    "actual_source": "日前电价"
+  },
+  "realtime": {
+    "sMAPE_floor50": 33.03,
+    "strategy": "rt_da_anchor",
+    "actual_source": "实时电价"
+  },
+  "blocked_reason": "Feature pipeline not compatible with P31-P40 model IDs. build_dayahead_features requires registered model IDs in registry but P31-P40 models use different feature column schemas.",
+  "unblock_steps": [
+    "Register P31-P40 model IDs in data/features/dayahead_features.py",
+    "Unify feature column schema across all models",
+    "Run full 2025 inference for cfg05 + catboost_spike_residual",
+    "Run run_p129_2025_trusted_bgew_benchmark.py"
+  ],
+  "claimable": [
+    "main.py runs 365 days without crash",
+    "cfg05-only day-ahead sMAPE: 20.22% (2025 full year)",
+    "realtime DA-Safe Baseline sMAPE: 33.03% (2025 full year)",
+    "trusted BGEW fusion sMAPE: 9.23% (June 2026 local window)",
+    "Full test suite: 2261 passed, 0 failed"
+  ],
+  "not_claimable": [
+    "BGEW fusion on 2025 full-year (blocked)",
+    "3.0 beats 2.5 (no fair comparison available)",
+    "SGDFNet production ready (code-only)",
+    "Full P5M residual ready (no-op fallback)",
+    "ML classifier production ready (rule fallback)"
+  ]
+}
