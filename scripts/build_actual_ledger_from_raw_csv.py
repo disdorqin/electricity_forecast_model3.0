@@ -60,6 +60,7 @@ def build_actual_ledger_from_raw_csv(
     end_day: Optional[str] = None,
     work_dir: Optional[str] = None,
     version: str = "1.0.0",
+    task: str = "dayahead",
 ) -> dict[str, Any]:
     """Build actual ledger from raw CSV.
 
@@ -75,6 +76,8 @@ def build_actual_ledger_from_raw_csv(
         Output directory for actual_ledger.csv.
     version : str
         Version string for the ledger.
+    task : str
+        "dayahead" or "realtime" — determines which column to use as y_true.
 
     Returns
     -------
@@ -118,12 +121,17 @@ def build_actual_ledger_from_raw_csv(
         return result
 
     # ── Extract y_true ──
-    if "日前电价" not in df_raw.columns:
+    if task == "realtime":
+        y_true_col = "实时电价"
+    else:
+        y_true_col = "日前电价"
+
+    if y_true_col not in df_raw.columns:
         result["final_status"] = P28_ACTUAL_LEDGER_BLOCKED
-        result["reason_codes"].append("NO_日前电价_COLUMN")
+        result["reason_codes"].append(f"NO_{y_true_col}_COLUMN")
         return result
 
-    df_raw["y_true"] = df_raw["日前电价"]
+    df_raw["y_true"] = df_raw[y_true_col]
 
     # ── Determine eval range ──
     if not start_day or not end_day:
@@ -160,7 +168,7 @@ def build_actual_ledger_from_raw_csv(
 
         for _, row in day_df.iterrows():
             rows.append({
-                "task": "dayahead",
+                "task": task,
                 "target_day": day_str,
                 "business_day": str(row["business_day"]),
                 "ds": row["ds"],
@@ -219,7 +227,7 @@ def build_actual_ledger_from_raw_csv(
     # ── Save ──
     ledger_dir = os.path.join(work_dir, "ledgers")
     os.makedirs(ledger_dir, exist_ok=True)
-    ledger_path = os.path.join(ledger_dir, "actual_ledger.csv")
+    ledger_path = os.path.join(ledger_dir, f"{task}_actual_ledger.csv")
     ledger_df.to_csv(ledger_path, index=False)
     result["actual_ledger_path"] = ledger_path
     result["reason_codes"].append(f"ACTUAL_LEDGER_SAVED:{len(ledger_df)}_rows")

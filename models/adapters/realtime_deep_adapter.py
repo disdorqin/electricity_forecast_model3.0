@@ -583,10 +583,14 @@ class RealtimeDeepAdapter:
             try:
                 raw_df = pd.read_csv(raw_data, encoding="gbk")
                 raw_df["ds"] = pd.to_datetime(raw_df["时刻"])
-                y_map = raw_df.set_index("ds")["日前电价"].to_dict()
+                # P123: realtime eval pack uses 实时电价, not 日前电价
+                y_map = raw_df.set_index("ds")["实时电价"].to_dict()
                 pack["y_true"] = pack["ds"].map(y_map)
             except Exception:
                 pass
+
+        # Save under eval_only/ subdirectory
+        out_dir = os.path.join(output_dir, "eval_only") if output_dir else output_dir
 
         output_path = os.path.join(out_dir, "realtime_eval_pack.csv")
         pack.to_csv(output_path, index=False)

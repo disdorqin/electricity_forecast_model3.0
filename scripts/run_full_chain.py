@@ -232,8 +232,8 @@ def run_full_chain(
     # ── Step 13: Unified weight learner ──
     from fusion.unified_weight_learner import train_unified_weights
     learner_result = train_unified_weights(
-        dayahead_predictions=da_ledger,
-        realtime_predictions=rt_ledger,
+        dayahead_predictions=da_corrected,  # P124: use corrected, not raw ledger
+        realtime_predictions=rt_corrected,  # P124: use corrected, not raw ledger
         dayahead_actuals=da_actuals,
         realtime_actuals=rt_actuals,
         target_day=target_end,
@@ -241,6 +241,7 @@ def run_full_chain(
     result["steps"]["unified_weight_learner"] = {
         "status": learner_result["status"],
         "training_days": learner_result.get("training_days", 0),
+        "data_source": "corrected_ledger" if residual_result["dayahead"]["status"] != "NO_OP" else "raw_ledger",
     }
     result["step_order"].append("unified_weight_learner")
 
@@ -250,8 +251,8 @@ def run_full_chain(
     # ── Step 14: Unified fusion ──
     from fusion.unified_fusion_engine import run_unified_fusion
     fusion_result = run_unified_fusion(
-        dayahead_predictions=da_ledger,
-        realtime_predictions=rt_ledger,
+        dayahead_predictions=da_corrected,  # P124: use corrected, not raw ledger
+        realtime_predictions=rt_corrected,  # P124: use corrected, not raw ledger
         dayahead_weights=da_weights,
         realtime_weights=rt_weights,
         target_day=target_end,
@@ -703,6 +704,7 @@ def _build_actual_ledger(
             end_day=end_day,
             work_dir=os.path.join(work_dir, "ledger"),
             version="v1",
+            task=task,
         )
         ledger_path = al.get("output_path")
         if ledger_path and os.path.isfile(ledger_path):

@@ -1,0 +1,56 @@
+{
+  "verdict": "2025_METRICS_VALIDATED_WITH_CAVEATS",
+  "version": "3.0.0-rc1",
+  "evaluation_period": "2025-01-01 to 2025-12-31",
+  "dayahead": {
+    "sMAPE_floor50": 20.22,
+    "MAE": 65.35,
+    "RMSE": 82.32,
+    "model_count": 1,
+    "models": ["lightgbm_cfg05_dayahead"],
+    "actual_source": "日前电价",
+    "fusion_applied": false,
+    "residual_applied": false,
+    "note": "cfg05 single-model only; no catboost_spike_residual, no BGEW fusion in 2025 run"
+  },
+  "realtime": {
+    "sMAPE_floor50": 33.03,
+    "MAE": 77.31,
+    "RMSE": 110.05,
+    "strategy": "rt_da_anchor (rt_pred = da_anchor)",
+    "actual_source": "实时电价",
+    "sgdfnet_assist": false,
+    "note": "DA-Safe Baseline only; no SGDFNet assist"
+  },
+  "root_causes": [
+    "MAIN_PATH_USES_CFG05_ONLY: Step 4 calls P16 cfg05 walkforward, not P31-P40 multi-model pool",
+    "CATBOOST_SPIKE_RESIDUAL_NOT_IN_MAIN_PATH: CatBoost model not loaded in main pipeline",
+    "BGEW_FUSION_NOT_APPLIED: No fusion weights in prediction ledger (single model only)",
+    "RESIDUAL_CORRECTED_NOT_FED_TO_LEARNER: da_corrected/rt_corrected were computed but ignored by learner/fusion (P124 fix applied)",
+    "REALTIME_ACTUAL_LEDGER_USED_WRONG_COLUMN: build_actual_ledger_from_raw_csv hardcoded 日前电价 for all tasks (P122 fix applied)"
+  ],
+  "caveats": [
+    "2025 evaluation used cfg05 single model only, NOT the full trusted BGEW fusion",
+    "2025 realtime used DA-Safe Baseline (rt_pred=da_anchor), NOT SGDFNet assist",
+    "3.0 local window (June 2026) showed 9.23% sMAPE with BGEW fusion — NOT comparable to 2025 full-year cfg05-only",
+    "2.5 comparison not available (no 2.5 artifacts on this machine)",
+    "P122/P124 bug fixes applied post-2025 run; future runs will use corrected ledger column and residual-fed fusion"
+  ],
+  "comparison_to_25": {
+    "available": false,
+    "reason": "2.5 repo artifacts not available on evaluation machine"
+  },
+  "claimable": [
+    "3.0 main.py runs 365 days without crash",
+    "3.0 cfg05-only day-ahead sMAPE: 20.22% (2025 full year)",
+    "3.0 realtime DA-Safe Baseline sMAPE: 33.03% (2025 full year)",
+    "3.0 local window BGEW fusion sMAPE: 9.23% (June 2026, trusted delivery)"
+  ],
+  "not_claimable": [
+    "3.0 BGEW fusion on 2025 full-year (not yet run with multi-model ledger)",
+    "3.0 beats 2.5 (no fair comparison available)",
+    "SGDFNet production ready (code-only)",
+    "Full P5M residual ready (no-op fallback)",
+    "ML classifier production ready (rule fallback)"
+  ]
+}
