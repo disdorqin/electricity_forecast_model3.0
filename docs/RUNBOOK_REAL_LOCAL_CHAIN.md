@@ -111,6 +111,38 @@ python -m scripts.run_p36_fusion_backtest --json
 python -m scripts.run_p38_fused_full_chain --target-day 2026-06-30 --json
 ```
 
+## P41-P45: Trusted Fusion Delivery (Default Profile)
+
+The delivery default is the **trusted_no_stage3** profile. Run in order:
+
+```bash
+# P41 — Model trust gate (flags SUSPECT_LEAKAGE models)
+python -m scripts.run_p41_model_trust_gate --json --strict
+
+# P42 — Trusted fusion backtest (excludes quarantined models)
+python -m scripts.run_p42_trusted_fusion_backtest --json
+
+# P43 — Rolling weight validation (no-lookahead verification)
+python -m scripts.run_p43_rolling_weight_fusion_validation --json --strict
+
+# P44 — Delivery readiness packager (assembles P41-P43)
+python -m scripts.run_p44_delivery_readiness_packager --json
+```
+
+### Profiles
+
+| Profile | Models | Delivery Allowed | Use Case |
+|---------|--------|-----------------|----------|
+| `trusted_no_stage3` | cfg05 + catboost_spike_residual | ✅ Yes | **Default production** |
+| `research_all_models` | All 5 (incl. stage3) | ❌ No | Research reproduction |
+
+### Important Notes
+
+- **stage3_business_fixed** excluded due to source-repo training leakage (sMAPE=0.39%, 82.5% within 1%)
+- **best_two_average** and **catboost_sota** excluded (corr > 0.995) — good models but conservative gate
+- Trusted pool is only 2 models, so fusion improvement is modest (~6.79%)
+- Research results (69.96%, 2.97%) are NOT delivery claims
+
 ## Artifact Layout
 
 ```

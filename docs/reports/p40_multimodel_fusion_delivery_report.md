@@ -96,14 +96,28 @@ Weights learned via `score_m = exp(-0.5 * sMAPE_m)`, then constrained (min=0.05,
 
 ## 8. Known Issues
 
-1. **Stage3 sMAPE seems too low** (0.26–0.60%). Suspected data leakage: the source adapter may have been trained with future-looking features or an erroneous data split. Should be investigated before production deployment.
+1. **Stage3 sMAPE seems too low** (0.26–0.60%). **Confirmed source-repo training leakage** in P41-P45 investigation (sMAPE=0.39%, 82.5% within 1%, corr=0.9999, MAE=1.20). `stage3_business_fixed` is excluded from delivery and labeled SUSPECT_LEAKAGE.
 
 2. **cfg05 model name mismatch**: In the 3.0 adapter, model_name is `lightgbm_cfg05_dayahead`, not `cfg05_dayahead_lgbm`. The P32 backtest script uses `cfg05_dayahead_lgbm` as the directory name, but the actual model_name column in prediction outputs uses the adapter's internal name. This was handled in P35 by the _ALL_MODELS list.
 
 3. **v3 feature gap**: The source feature builder produces 42 columns, but cfg05 3.0 adapter expects 54 (including 14 v3 features). P31 fills these with approximations. For production, the full 54-column pipeline should be implemented.
 
-4. **Test counts**: P31-P38 test scripts need to be created (planned as P31-P38 test files). Current tests are pending.
+4. **Test counts**: P31-P38 test scripts created (114 tests). P41-P45 test file created (39 tests). Total: ~1414 tests passing.
+
+## 9. P41-P45 Follow-up: Trusted Delivery Fix
+
+After the P40 report, a dedicated P41-P45 sprint investigated the stage3 leakage and created a production-ready delivery pipeline:
+
+**Findings**:
+- **Stage3 confirmed leaked**: Source repo training data issue (not fixable in 3.0). sMAPE=0.39% is artifactual.
+- **best_two_average** and **catboost_sota** flagged SUSPECT_LEAKAGE (corr > 0.995) — conservative threshold
+- **Trusted pool**: cfg05 (9.90%) + catboost_spike_residual (11.35%) — only 2 models
+- **Trusted fusion**: 9.23% sMAPE (+6.79% vs cfg05) — holds out-of-sample (split/rolling validated)
+
+**Delivery recommendation**: Use `trusted_no_stage3` profile with `trusted_bgew_fusion` as default. The 69.96% / 2.97% research result is **not** delivery-claimable.
+
+See [P45 delivery report](p45_trusted_delivery_report.md) for full details.
 
 ---
 
-*End of P40 delivery report. Fusion improves cfg05-alone by +70% sMAPE.*
+*End of P40 delivery report. Fusion improves cfg05-alone by +70% sMAPE (research). **Delivery result: +6.79% improvement with trusted_no_stage3 profile.***
